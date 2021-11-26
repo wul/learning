@@ -1,4 +1,4 @@
-
+#![allow(non_snake_case)]
 
 fn fail(pattern: &str) -> Vec<u32> {
     let mut v: Vec<u32> = Vec::new();
@@ -19,16 +19,15 @@ fn fail(pattern: &str) -> Vec<u32> {
 }
 
 fn KMP(s: &str, p: &str) -> i32 {
-
+    let mut index = -1;
     let tries = fail(p);
 
     let length = s.chars().count();
     let pattern_length = p.chars().count();
     let mut i = 0;
     
-    let mut index = -1;
+    while i < length {
     
-    while i < s.chars().count() {
         if i + pattern_length > length {
             return -1;
         }
@@ -48,18 +47,12 @@ fn KMP(s: &str, p: &str) -> i32 {
         }
         
         if j < pattern_length {
-            //not found
-            let mut skip = 1;
-            if tries[j] != 0 {
-                skip = tries[j] as usize;
-            } else {
-                skip = 1;
-            }
+            let skip = if tries[j] > 0 {tries[j]} else {1};
             println!("j={}, skip {}", j, skip);
-            i += skip;
+            i += skip as usize;
 
         } else {
-            let index = i - j;
+            index = (i - j) as i32;
             println!("found {} in {} at postion {}", p, s, index);
             break;
         }
@@ -69,20 +62,39 @@ fn KMP(s: &str, p: &str) -> i32 {
     
 }
 
-fn main() {
-    let s = "abababaab";
-    let v = fail(s);
-    println!("{:?}", v);
-    /*
-    println!("aaaaa");
-    println!("{}", &s[0..0]);
-    println!("{}", s.starts_with(&s[0..0]));
-    println!("bbbbbb");
+#[cfg(test)]
+mod tests {
+    use super::*;
     
-    println!("{}", s.chars().nth(12).unwrap());
-    println!("hihihih");
-    */
-    //   "abababaab"
-    KMP("dababasdfabababaabaiffaf", s);
+    #[test]
+    fn search1 () {
+        let s = "abababaab";
+        assert_eq!(KMP("dababasdfabababaabaiffaf", s), 9);  
+    }
+
+    #[test]
+    fn search2 () {
+        let s = "abababaab";
+        assert_eq!(KMP("a", s), -1);    
+    }
+
+    #[test]
+    fn search3 () {
+        let s = "abababaab";
+        assert_eq!(KMP(s, s), 0);    
+    }
+
+    #[test]
+    fn search4 () {
+        let s = "abababaab";
+        assert_eq!(KMP(s, "abababaad"), -1);    
+    }
+
+    #[test]
+    fn search5 () {
+        let s = "ab";
+        assert_eq!(KMP("acbababe", s), 3);    
+    }
+
     
 }
