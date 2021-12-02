@@ -41,4 +41,10 @@ mod tests {
         //assert_eq!(x, Kind::A);
         matches!(x, Kind::A);
     }
+  
+    fn test_default2() {
+        let x:Kind = Kind::default();
+        matches!(x, Kind::A);
+    }
+  
 }
