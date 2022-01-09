@@ -20,6 +20,7 @@ int yylval;
 \n     {return EOL; }
 [ \t]  {/* skip white spaces */}
 .      {printf("Mystery character %s\n", yytext);}
+"//".*	/*忽略注释*/
 %%
 
 int main(int argc, char **argv) {
