@@ -18,3 +18,7 @@ count2: count2.l
 fb2-3: fb2-3.l
 	flex fb2-3.l
 	gcc -o $@ lex.yy.c -ll
+
+fb2-4: fb2-4.l
+	flex fb2-4.l
+	gcc -o $@ lex.yy.c -ll
