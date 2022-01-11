@@ -1,6 +1,8 @@
 %option noyywrap
 %x IFILE
 
+
+
 %{
   struct bufstack {
     struct bufstack *prev;
@@ -44,6 +46,8 @@
 ^\n                      { fprintf(yyout, "%4d %s", yylineno++, yytext); }
 \n                       { ECHO; yylineno++;}
 .                        { ECHO; }
+
+
 			   
 %%
 
@@ -53,7 +57,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "need filename\n");
     return 1;
   }
-
+ 
 
   if (newfile(argv[1]))
     yylex();

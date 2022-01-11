@@ -1,5 +1,5 @@
 extern char *p;
-#include <2.h>
+#include <fb2-3-2.txt>
 
 char fn() {
 int a;

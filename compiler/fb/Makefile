@@ -1,4 +1,4 @@
-all: fb1-3 fb1-4 fb1-5 count count2 fb2-3 fb2-4
+all: fb1-3 fb1-4 fb1-5 fb2-3 fb2-4
 fb1-5: fb1-5.l fb1-5.y
 	bison -d fb1-5.y
 	flex fb1-5.l
@@ -22,4 +22,8 @@ fb2-3: fb2-3.l
 
 fb2-4: fb2-4.l
 	flex fb2-4.l
+	gcc -o $@ lex.yy.c -ll
+
+fb2-5: fb2-5.lex
+	flex $<
 	gcc -o $@ lex.yy.c -ll

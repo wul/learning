@@ -1,0 +1,9 @@
+#define TEST mytest
+
+
+
+int test1(char *name) {
+    printf(name);
+}
+
+int b =0;

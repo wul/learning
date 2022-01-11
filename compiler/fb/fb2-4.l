@@ -43,7 +43,7 @@ the |
 this |
 to
 
-[a-z]+(\'(s|t))?	{ addref(yylineno, curfilename, yytext, o); }
+[a-z]+(\'(s|t))?	{ addref(yylineno, curfilename, yytext, 0); }
 .|\n
 %%
 
@@ -52,6 +52,7 @@ static unsigned symhash(char *sym)
 	unsigned int hash = 0;
 	unsigned c;
 	while (c = *sym++) hash = hash * 9 ^ c;
+        printf("Hash value for %s is %d\n", sym, hash);
 	return hash;
 }
 
@@ -91,6 +92,8 @@ void addref(int lineno, char* filename, char *word, int flags)
   r->flags = flags;
   sp->reflist = r;
 }
+
+
 
 
 static int symcompare(const void *xa, const void *xb)
@@ -144,7 +147,7 @@ int main(int argc, char **argv)
     yylineno = 1;
     yylex();
   } else {
-    for (i = 0; i < argc; i++) {
+    for (i = 1; i < argc; i++) {
       FILE *f = fopen(argv[i], "r");
       if (!f) {
 	perror(argv[1]);
