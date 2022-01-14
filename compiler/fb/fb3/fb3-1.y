@@ -13,6 +13,8 @@
 %token <d> NUMBER
 %token EOL
 
+
+
 %type <a> exp factor term
 
 %%
@@ -23,7 +25,7 @@ calclist:
     printf("> ");
  }
 	|	calclist EOL {
-    printf("> "); } /*空行或者注释*/
+    printf("> "); } 
 		;
 
 exp:		factor
@@ -46,3 +48,25 @@ term:		 NUMBER {$$ = newnum($1); }
 	;
 
 %%
+
+/*
+
+%left '+' '-'
+%left '*' '/'
+%nonassoc '|'
+
+%type <a> exp
+
+%%
+exp: exp '+' exp {$$ = newast('+', $1, $3); }
+| exp '-' exp { $$ = newast('-', $1, $3); }
+| exp '*' exp { $$ = newast('*', $1, $3); }
+| exp '/' exp { $$ = newast('/', $1, $3); }
+| '|' exp {$$ = newast('|', $2, NULL); }
+| '(' exp ')' { $$ = $2;}
+| '-' exp { $$ = newast('M', NULL, $2); }
+| NUMBER {$$ = newnum($1); }
+;
+%%
+
+*/
