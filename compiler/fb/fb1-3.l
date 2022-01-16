@@ -1,5 +1,10 @@
+
+/*  \+ and "+" both ok, but cannot use '+' 
+ * 
+ * comments cannot be in rule section
+ */
 %%
-"+"	{printf("PLUS\n"); }
+\+	{printf("PLUS\n"); }
 "-"	{printf("MINUS\n"); }
 "*"	{printf("TIMES\n"); }
 "/"	{printf("DIVIDE\n"); }
