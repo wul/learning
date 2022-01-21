@@ -10,6 +10,13 @@ F  -> ( E ) | id
 
 CFG = namedtuple('CFG', "NT T P S")
 
+# The format of CFG
+# T   : set of terminals
+# NT  : set of non-terminals
+# P   : dict of non-terminals with key as non-terminal
+#     : value is dictionary of production body and derivated terminals pair
+# S   : start symbol
+
 def normalize(productions):
 
     T  = set()
@@ -28,10 +35,12 @@ def normalize(productions):
 
             # Turn bodies from strings to lists
             bodies = [body.strip().split() for body in bodies.strip().split("|")]
-            try:
-                prod[left].extend(bodies)
-            except:
-                prod[left] = bodies
+            for body in bodies:
+                if left not in prod:
+                    prod[left] = {}
+
+                #the set will save all derivated terminals later
+                prod[left][tuple(body)] = set()
 
             for body in bodies:
                 for symbol in body:
@@ -48,19 +57,21 @@ def FIRST(nt, cfg):
     productions = cfg.P
     chr_set = set()
     bodies_for_nt = productions[nt]
-    for body in bodies_for_nt:
+    for body, derivated_terminals in bodies_for_nt.items():
         for symbol in body:
-            if symbol in productions.keys():
+            if is_non_terminal(symbol, cfg):
                 #It's a non-terminal, we need calculate the first
                 #set of it and check if epsilon in it. If epsilon is in it,
                 #we need check consequent symbol too
                 chrs = FIRST(symbol, cfg)
                 chr_set |= chrs
+                derivated_terminals |= chrs
                 if 'ε' not in chrs:
                     break
             else:
                 #it is a terminal symbol, we just add it and break loop
                 chr_set.add(symbol)
+                derivated_terminals.add(symbol)
                 #skip out the loop
                 break
                 
@@ -165,20 +176,26 @@ def LL1(cfg):
     for nt in cfg.NT:
         first_set = FIRST(nt, cfg)
         for symbol in first_set:
-            if symbol != 'ε':
-                table[(nt, symbol)] = productions[nt]
-            else:
-                for x in FOLLOW(nt, cfg):
-                    table[(nt, x)] = [['ε']]
+            for body, derivated_terminals in productions[nt].items():
+                if symbol == 'ε':
+                    for x in FOLLOW(nt, cfg):
+                        table[(nt, x)] = ['ε']
+                        
+                else:
+                    if symbol in derivated_terminals:
+                        table[(nt, symbol)] = body
+
 
     return table
 
 def print_table(table):
+    pprint.pprint(table)
     rows = set()
     cols = set()
     for row, col in table:
         rows.add(row)
         cols.add(col)
+    
     print("Constuction table:")
     print("_____________________________________________________")
     print("{:8s}".format(""), end="")    
@@ -190,9 +207,11 @@ def print_table(table):
         print("{:8s}".format(row), end='')
         for col in cols:
             try:
-                s = row + " -> " + " ".join(table[(row, col)][0])
-            except KeyError:
+                body = table[(row,col)]
+                s = row + " -> " + " ".join(body)
+            except:
                 s = ""
+            
             print("{:<15s}".format(s), end="")
         print("")
 
@@ -205,6 +224,8 @@ if __name__ == '__main__':
     for nt in ['E', "E'", "T", "T'", 'F']:
         print("FIRST({})\t:\t{}".format(nt, str(FIRST(nt, cfg))))
 
+    print("Print CFG again:")
+    pprint.pprint(cfg)
 
     print("Calculate FOLLOWs")        
     for nt in ['E', "E'", "T", "T'", 'F']:
