@@ -17,19 +17,3 @@ count: count.l
 count2: count2.l
 	flex count2.l
 	gcc -o $@ lex.yy.c -ll
-fb2-3: fb2-3.l
-	flex fb2-3.l
-	gcc -o $@ lex.yy.c -ll
-
-fb2-4: fb2-4.l
-	flex fb2-4.l
-	gcc -o $@ lex.yy.c -ll
-
-fb2-5: fb2-5.lex
-	flex $<
-	gcc -o $@ lex.yy.c -ll
-
-fb3-1: fb3-1.lex fb3-1.y fb3-1funcs.c
-	bison -d fb3-1.y
-	flex fb3-1.lex
-	gcc -o $@ lex.yy.c fb3-1.tab.c fb3-1funcs.c

@@ -70,6 +70,7 @@ void yyerror(char *s, ...)
   fprintf(stderr, "\n");
 }
 
+extern int yyparse (void);
 int main()
 {
   printf("> ");
