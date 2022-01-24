@@ -215,11 +215,127 @@ def print_table(table):
             print("{:<15s}".format(s), end="")
         print("")
 
+Item = namedtuple('Item', "head body dot")
+
+class LR0():
+    def __init__(self, cfg):
+        self._ACTION = None
+        self._GOTO = {}
+        self.cfg = cfg
+
+        # state is set of items
+        self._state = {}
+        state = self.closure(self.cfg.S)
+        state.add(Item(head="S'", body=(cfg.S,), dot=0))
+        self._state[0] = state
+        
+        #self.traversal_state()
+
+    def traversal_state(self):
+        state_idx = 0
+        pool = {state_idx}
+        processed = set()
+        
+        while True:
+            new_states = set()
+            for state_idx in pool:
+                if state_idx in processed:
+                    continue
+                
+                state = self._state[state_idx]
+                for X in self.get_next_goto_X(state):
+                    new_state = self.goto(state, X)
+                    new_state_idx = self.get_state_idx(new_state)
+                    if new_state_idx is None:
+                        new_state_idx = len(self._state)
+                        self._state[new_state_idx] = new_state
+                        new_states.add(new_state_idx)
+                        
+                    self._GOTO[state_idx, X] = new_state_idx
+                    
+                processed.add(new_state_idx)
+
+                
+            # all states are processed
+            if not new_states:
+                break
+            else:
+                pool |= new_states
+        
+    def get_state_idx(self, state):
+        for idx, st in self._state.items():
+            if st == state:
+                return idx
+
+        return None
+        
+    def get_next_goto_X(self, state):
+        Xs = set()
+        for item in state:
+            if item.dot < len(item.body) and item.body[item.dot] != 'ε':
+                Xs.add(item.body[item.dot])
+        return Xs
+    
+    def goto(self, state, X):
+        st = set()
+        for item in state:
+            if item.dot == len(item.body):
+                continue
+            if item.body[item.dot] == X:
+                item = Item(head=item.head, body=item.body, dot=item.dot+1)
+                st.add(item)
+
+        derived_items = set()
+        for X in self.get_next_goto_X(state):
+            if is_non_terminal(X, self.cfg):
+                derived_items |= self.closure(X)
+                    
+        return st | derived_items
+        
+    def __expr__(self):
+        return str(self._state) + "\n" + str(self._GOTO)
+
+
+    def closure(self, nt):
+        items = set()
+        bodies = self.cfg.P[nt]
+        for body in bodies:
+            items.add(Item(head=nt, body=body, dot=0))
+
+
+        while True:
+            new_items = set()
+            for item in items:
+                symbol = item.body[item.dot]
+                if is_non_terminal(symbol, self.cfg):
+                    bodies = self.cfg.P[symbol]
+                    for body in bodies:
+                        i = Item(head=symbol, body=body, dot=0)
+                        if i not in items:
+                            new_items.add(i)
+            if not new_items:
+                break
+            else:
+                items |= new_items
+
+        return items
+
+    def print(self):
+        for idx, state in self._state.items():
+            print("{}\t:".format(idx))
+            for item in state:
+                print("\t{}".format(item))
+    
 if __name__ == '__main__':
+    productions = '''
+    E -> E + T | T
+    T -> T * F | F
+    F -> ( E ) | id
+    '''
     cfg = normalize(productions)
     pprint.pprint(cfg)
 
-
+    '''
     print("Calculate FIRSTs")
     for nt in ['E', "E'", "T", "T'", 'F']:
         print("FIRST({})\t:\t{}".format(nt, str(FIRST(nt, cfg))))
@@ -233,4 +349,7 @@ if __name__ == '__main__':
 
     r = LL1(cfg)
     print_table(r)
-        
+    '''
+    parser = LR0(cfg)
+    parser.traversal_state()
+    parser.print()
