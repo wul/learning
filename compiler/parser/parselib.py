@@ -10,6 +10,68 @@ F  -> ( E ) | id
 
 CFG = namedtuple('CFG', "NT T P S")
 
+class Production:
+    def __init__(self, str_exp, rank):
+        self.rank = rank
+        self.head = None
+        self.bodies = None
+        self.first_set = set()
+        self.follow_set = set()
+        self.production_str = str_exp.strip()
+
+        self.parse_production_str(str_exp)
+        
+        
+    def parse_production_str(self, s):
+        left, bodies = s.split("->")
+        left = left.strip()
+        self.head = left
+
+        # Turn bodies from strings to lists
+        self.bodies = [body.strip().split() for body in bodies.strip().split("|")]
+
+    def add_to_first_set(self, symbol, body):
+        pass
+
+    def add_to_follow_set(self, symbol, body):
+        pass
+
+    def __eq__(self, other):
+        return self.rank == other.rank and self.head == other.head
+
+    def __hash__(self):
+        return self.production_str.__hash__()
+    
+
+# The format of CFG
+# T   : set of terminals
+# NT  : set of non-terminals
+# P   : dict of non-terminals with key as non-terminal
+#     : value is dictionary of production body and derivated terminals pair
+# S   : start symbol
+def normalize2(productions):
+
+    T  = set()
+    NT = set()
+    P  = []
+    S  = None
+    
+    idx = 0
+    symbol_set = set(productions.replace("->", "").replace("|", " ").split())
+    
+    for line in productions.splitlines():
+        idx += 1
+        production = Production(line, idx)
+        P.append(production) 
+        if S is None:
+            S = production.head
+            
+        NT.add(production.head)
+
+    T = symbol_set - NT
+    return CFG(T=T, NT=NT, S=S, P=P)
+    
+
 # The format of CFG
 # T   : set of terminals
 # NT  : set of non-terminals
@@ -228,12 +290,11 @@ class LR0():
         state = self.closure(self.cfg.S)
         state.add(Item(head="S'", body=(cfg.S,), dot=0))
         self._state[0] = state
-        
+        self.state_index = 0
         #self.traversal_state()
 
     def traversal_state(self):
-        state_idx = 0
-        pool = {state_idx}
+        pool = {self.state_index}
         processed = set()
         
         while True:
@@ -242,18 +303,21 @@ class LR0():
                 if state_idx in processed:
                     continue
                 
+                
                 state = self._state[state_idx]
                 for X in self.get_next_goto_X(state):
                     new_state = self.goto(state, X)
                     new_state_idx = self.get_state_idx(new_state)
+                    
                     if new_state_idx is None:
-                        new_state_idx = len(self._state)
+                        self.state_index += 1
+                        new_state_idx = self.state_index
                         self._state[new_state_idx] = new_state
                         new_states.add(new_state_idx)
                         
                     self._GOTO[state_idx, X] = new_state_idx
                     
-                processed.add(new_state_idx)
+                processed.add(state_idx)
 
                 
             # all states are processed
@@ -286,7 +350,7 @@ class LR0():
                 st.add(item)
 
         derived_items = set()
-        for X in self.get_next_goto_X(state):
+        for X in self.get_next_goto_X(st):
             if is_non_terminal(X, self.cfg):
                 derived_items |= self.closure(X)
                     

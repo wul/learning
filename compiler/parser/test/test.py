@@ -60,7 +60,7 @@ class TestLR0(unittest.TestCase):
 
         I1 = lr0.goto(I0, "E")
         self.assertEqual(I1, {Item(head="S'", body=("E",), dot=1),
-                              Item(head="E", body=("E", "+", "T'"), dot=0),
+                              Item(head="E", body=("E", "+", "T"), dot=1),
         })        
         pass
     
