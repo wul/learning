@@ -18,7 +18,7 @@ class Production:
         self.first_set = set()
         self.follow_set = set()
         self.production_str = str_exp.strip()
-
+        self.first_set_map = {}
         self.parse_production_str(str_exp)
         
         
@@ -31,7 +31,9 @@ class Production:
         self.bodies = [body.strip().split() for body in bodies.strip().split("|")]
 
     def add_to_first_set(self, symbol, body):
-        pass
+        self.first_set.add(symobl)
+        self.first_set_map(symbol, body)
+
 
     def add_to_follow_set(self, symbol, body):
         pass
@@ -41,80 +43,211 @@ class Production:
 
     def __hash__(self):
         return self.production_str.__hash__()
-    
 
-# The format of CFG
-# T   : set of terminals
-# NT  : set of non-terminals
-# P   : dict of non-terminals with key as non-terminal
-#     : value is dictionary of production body and derivated terminals pair
-# S   : start symbol
-def normalize2(productions):
+EPSILON = 'ε'
 
-    T  = set()
-    NT = set()
-    P  = []
-    S  = None
+class CFG():
+
+    def __init__(self, productions_str):
+        
+        # The format of CFG
+        # T   : set of terminals
+        # NT  : set of non-terminals
+        # P   : dict of non-terminals with key as non-terminal
+        #     : value is dictionary of production body and derivated terminals pair
+        # S   : start symbol
+        self.T  = set()
+        self.NT = set()
+        self.P  = []
+        self.S  = None
+
+        # helper varaibles
+        # for quick locating production according to production head
+        self.loc = {}
+        self.normalize(productions_str)
+
+        self.FIRST = {}
+        self.FOLLOW = {}
+        
+    def normalize(self, productions):
+        idx = 0
+        symbol_set = set(productions.replace("->", "").replace("|", " ").split())
     
-    idx = 0
-    symbol_set = set(productions.replace("->", "").replace("|", " ").split())
-    
-    for line in productions.splitlines():
-        idx += 1
-        production = Production(line, idx)
-        P.append(production) 
-        if S is None:
-            S = production.head
+        for line in productions.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            production = Production(line, idx)
+            self.P.append(production) 
+            if self.S is None:
+                self.S = production.head
             
-        NT.add(production.head)
+            self.NT.add(production.head)
+            self.loc[production.head] = idx
 
-    T = symbol_set - NT
-    return CFG(T=T, NT=NT, S=S, P=P)
+            idx += 1
+
+        self.T = symbol_set - self.NT
+
+    def is_non_terminal(self, symbol):
+        return symbol in self.NT
+
+    def is_terminal(self, symbol):
+        return symbol in self.T
     
+    def get_first_set(self, nt):
+        try:
+            return self.FIRST[nt]
+        except KeyError:
+            pass
 
-# The format of CFG
-# T   : set of terminals
-# NT  : set of non-terminals
-# P   : dict of non-terminals with key as non-terminal
-#     : value is dictionary of production body and derivated terminals pair
-# S   : start symbol
 
-def normalize(productions):
+        print(self.loc)
+        idx = self.loc[nt]
+        production = self.P[idx]
 
-    T  = set()
-    NT = set()
-    P  = {}
-    S  = None
-    
-    prod = {}
-    for line in productions.splitlines():
-        line = line.strip()
-        if line:
-            left, bodies = line.split("->")
-            left = left.strip()
-            if S is None:
-                S = left
-
-            # Turn bodies from strings to lists
-            bodies = [body.strip().split() for body in bodies.strip().split("|")]
-            for body in bodies:
-                if left not in prod:
-                    prod[left] = {}
-
-                #the set will save all derivated terminals later
-                prod[left][tuple(body)] = set()
-
-            for body in bodies:
+        pool = {nt,}
+        
+        path = []
+        def walk(nt, path):
+            if nt in path:
+                #loop, ignore
+                return set()
+            
+            index = self.loc[nt]
+            production = self.P[index]
+            chr_set = set()
+            for body in production.bodies:
                 for symbol in body:
-                    if symbol.isupper():
-                        NT.add(symbol)
+                    if self.is_non_terminal(symbol):
+                        new_idx = self.loc[symbol]
+                        chrs = walk(symbol, nt)
+                        chr_set |= chrs
+                        if not EPSILON in chrs:
+                            break
                     else:
-                        T.add(symbol)
+                        chr_set.add(symbol)
+                        print("added first terminal {} for NT {}".format(symbol, nt))
+                        break
+
+
+            return chr_set
+        
+
+        r = walk(nt, path)
+        self.FIRST[nt] = r
+        return r
+        
+        '''
+        chr_set = set()
+        for body in production.bodies:
+            print("BODY:{}".format(body))
             
-    return CFG(T=T, NT=NT, S=S, P=prod)
+            for symbol in body:
+                if self.is_non_terminal(symbol):
+                    chrs = self.get_first_set(symbol)
+                    chr_set |= chrs
+                    for x in chrs:
+                        production.add_to_first_set(x, body)
+                    if EPSILON not in chrs:
+                        break
+                else:
+                    #It is a terminal, just add it to break loop
+                    chr_set.add(symbol)
+                    production.add_to_first_set(symbol, body)
+                    break
+                
+        self.FIRST[nt] = chr_set
+        return chr_set
+        '''
+
+    def get_follow_set(self, nt):
+        chr_set = {'$'}
+        productions = self.P
 
 
+        rels  = {}
+        cache = {}
+        # Get direct follows for each non-terminals
+        # and deduct relations between FOLLOW set of each non-terminals
 
+        for production in self.P:
+            left = production.head
+            bodies = production.bodies
+
+            for right in bodies:
+                check_follow = False
+                last_nt      = None
+                for symbol in right:
+                    if is_non_terminal(symbol, cfg):
+                        if check_follow:
+                            symbols = FIRST(symbol, cfg) - {'ε'}
+                            try:
+                                cache[last_nt] |= symbols
+                            except KeyError:
+                                cache[last_nt] = symbols
+
+                        check_follow = True
+                        last_nt = symbol
+                    else:
+                        # It's terminal
+                        if check_follow:
+                            symbols = {symbol,}
+                            try:
+                                cache[last_nt] |= symbols
+                            except KeyError:
+                                cache[last_nt] = symbols
+
+                        check_follow = False
+
+                # Deduct the relations of FOLLOW sets
+                for symbol in reversed(right):
+                    if is_terminal(symbol, cfg):
+                        break
+                    else:
+                        #non-terminal
+                        if left != symbol:
+                            # ignore self contains
+                            try:
+                                rels[symbol].add(left)
+                            except KeyError:
+                                rels[symbol] = {left,}
+                    
+                        
+                        if EPSILON not in FIRST(symbol, cfg):
+                            break
+
+        try:
+            cache[cfg.S].add('$')
+        except KeyError:
+            cache[cfg.S] = {'$'}
+    
+
+
+        # Calculate all subset of FOLLOW(nt)
+        def lookup_relations(nt, rels, st):
+            lst = rels.get(nt, set())
+            for x in lst:
+                if x not in st:
+                    st.add(x)
+                    lookup_relations(x, rels, st)
+
+
+    
+        chr_set |= cache.get(nt, set())
+
+        subsets = set()
+        lookup_relations(nt, rels, subsets)
+    
+        for symbol in subsets:
+            chr_set |= cache.get(symbol, set())
+            
+
+        return chr_set        
+                                    
+
+    
 def FIRST(nt, cfg):
     productions = cfg.P
     chr_set = set()
@@ -396,14 +529,12 @@ if __name__ == '__main__':
     T -> T * F | F
     F -> ( E ) | id
     '''
-    cfg = normalize(productions)
-    pprint.pprint(cfg)
+    cfg = CFG(productions)
+    print("Calculate FIRSTs")
+    for nt in ["E", "T", 'F']:
+        print("FIRST({})\t:\t{}".format(nt, cfg.get_first_set(nt)))
 
     '''
-    print("Calculate FIRSTs")
-    for nt in ['E', "E'", "T", "T'", 'F']:
-        print("FIRST({})\t:\t{}".format(nt, str(FIRST(nt, cfg))))
-
     print("Print CFG again:")
     pprint.pprint(cfg)
 
@@ -413,7 +544,8 @@ if __name__ == '__main__':
 
     r = LL1(cfg)
     print_table(r)
-    '''
+
     parser = LR0(cfg)
     parser.traversal_state()
     parser.print()
+    '''
