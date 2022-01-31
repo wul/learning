@@ -23,5 +23,18 @@
 (hello2 "abc")
 (hello2 'abc)
 (hello2 'af)
+(setq liwu "LI WU")
+(symbolp 'liwu)
+(symbolp "liwu")
+(hello 'liwu)
+(hello liwu)
+(symbol-name 'liwu)
+(symbol-function 'liwu)
+(symbol-function 'hello)
 
+(defun foo (b1 b2)
+  (interactive "bBuffer to rename:\nsRename buffer %s to:")
+  (message "we change %s to %s" b1 b2))
+
+(foo 'zs)
 
