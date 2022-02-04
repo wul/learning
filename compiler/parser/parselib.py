@@ -9,18 +9,20 @@ F  -> ( E ) | id
 '''
 
 CFG = namedtuple('CFG', "NT T P S")
+Item = namedtuple('Item', "head body dot lookahead", defaults=('', tuple(), 0, ''))
 
 class Production:
     def __init__(self, str_exp, rank):
         self.rank = rank
         self.head = None
         self.bodies = None
-        self.first_set = set()
-        self.follow_set = set()
+        
         self.production_str = str_exp.strip()
-        self.first_set_map = {}
         self.parse_production_str(str_exp)
         
+    def deconstruct(self):
+        return set([Item(head=self.head, body=tuple(body), dot=0) for body in self.bodies])
+
         
     def parse_production_str(self, s):
         left, bodies = s.split("->")
@@ -28,15 +30,8 @@ class Production:
         self.head = left
 
         # Turn bodies from strings to lists
-        self.bodies = [body.strip().split() for body in bodies.strip().split("|")]
+        self.bodies = tuple([body.strip().split() for body in bodies.strip().split("|")])
 
-    def add_to_first_set(self, symbol, body):
-        self.first_set.add(symobl)
-        self.first_set_map(symbol, body)
-
-
-    def add_to_follow_set(self, symbol, body):
-        pass
 
     def __eq__(self, other):
         return self.rank == other.rank and self.head == other.head
@@ -45,6 +40,7 @@ class Production:
         return self.production_str.__hash__()
 
 EPSILON = 'ε'
+ENDMARKER = '$'
 
 class CFG():
 
@@ -63,11 +59,13 @@ class CFG():
 
         # helper varaibles
         # for quick locating production according to production head
+        # key:value is NT: index
         self.loc = {}
+        self._FIRST = {}
+        self._FOLLOW = {}
+
         self.normalize(productions_str)
 
-        self.FIRST = {}
-        self.FOLLOW = {}
         
     def normalize(self, productions):
         idx = 0
@@ -79,7 +77,8 @@ class CFG():
                 continue
 
             production = Production(line, idx)
-            self.P.append(production) 
+            self.P.append(production)
+            
             if self.S is None:
                 self.S = production.head
             
@@ -90,20 +89,36 @@ class CFG():
 
         self.T = symbol_set - self.NT
 
+        # Have to initialize follow/first seperately, because calculation of follow need first set 
+        for nt in self.NT:
+            self.calculate_first_set(nt)
+
+        for nt in self.NT:
+            self.calculate_follow_set(nt)
+
+    def get_production(self, nt):
+        try:
+            return self.P[self.loc[nt]]
+        except KeyError:
+            return None
+
+    def __iter__(self):
+        return iter(tuple(self.P))
+
     def is_non_terminal(self, symbol):
         return symbol in self.NT
 
     def is_terminal(self, symbol):
         return symbol in self.T
+
+
     
-    def get_first_set(self, nt):
-        try:
-            return self.FIRST[nt]
-        except KeyError:
-            pass
+    def add_to_first_set(self, nt, t, body):
+        d = self._FIRST.get(nt, {})
+        d[t] = body
+        self._FIRST[nt] = d
 
-
-        print(self.loc)
+    def calculate_first_set(self, nt):
         idx = self.loc[nt]
         production = self.P[idx]
 
@@ -123,52 +138,33 @@ class CFG():
                     if self.is_non_terminal(symbol):
                         new_idx = self.loc[symbol]
                         chrs = walk(symbol, nt)
+                        for char in chrs:
+                            self.add_to_first_set(nt, char, body)
+
+                            
                         chr_set |= chrs
                         if not EPSILON in chrs:
                             break
                     else:
+                        self.add_to_first_set(nt, symbol, body)
                         chr_set.add(symbol)
-                        print("added first terminal {} for NT {}".format(symbol, nt))
                         break
 
 
             return chr_set
         
 
-        r = walk(nt, path)
-        self.FIRST[nt] = r
-        return r
-        
-        '''
-        chr_set = set()
-        for body in production.bodies:
-            print("BODY:{}".format(body))
-            
-            for symbol in body:
-                if self.is_non_terminal(symbol):
-                    chrs = self.get_first_set(symbol)
-                    chr_set |= chrs
-                    for x in chrs:
-                        production.add_to_first_set(x, body)
-                    if EPSILON not in chrs:
-                        break
-                else:
-                    #It is a terminal, just add it to break loop
-                    chr_set.add(symbol)
-                    production.add_to_first_set(symbol, body)
-                    break
-                
-        self.FIRST[nt] = chr_set
-        return chr_set
-        '''
+        walk(nt, path)
 
-    def get_follow_set(self, nt):
+
+    def calculate_follow_set(self, nt):
         chr_set = {'$'}
         productions = self.P
 
 
         rels  = {}
         cache = {}
+        
         # Get direct follows for each non-terminals
         # and deduct relations between FOLLOW set of each non-terminals
 
@@ -180,9 +176,10 @@ class CFG():
                 check_follow = False
                 last_nt      = None
                 for symbol in right:
-                    if is_non_terminal(symbol, cfg):
+                    if self.is_non_terminal(symbol):
+
                         if check_follow:
-                            symbols = FIRST(symbol, cfg) - {'ε'}
+                            symbols = self.FIRST(symbol) - {EPSILON}
                             try:
                                 cache[last_nt] |= symbols
                             except KeyError:
@@ -203,7 +200,7 @@ class CFG():
 
                 # Deduct the relations of FOLLOW sets
                 for symbol in reversed(right):
-                    if is_terminal(symbol, cfg):
+                    if self.is_terminal(symbol):
                         break
                     else:
                         #non-terminal
@@ -215,13 +212,14 @@ class CFG():
                                 rels[symbol] = {left,}
                     
                         
-                        if EPSILON not in FIRST(symbol, cfg):
+                        if EPSILON not in self.FIRST(symbol):
                             break
 
+                
         try:
-            cache[cfg.S].add('$')
+            cache[self.S].add('$')
         except KeyError:
-            cache[cfg.S] = {'$'}
+            cache[self.S] = {'$'}
     
 
 
@@ -244,183 +242,104 @@ class CFG():
             chr_set |= cache.get(symbol, set())
             
 
-        return chr_set        
-                                    
-
+        self._FOLLOW[nt] = chr_set
+        
     
-def FIRST(nt, cfg):
-    productions = cfg.P
-    chr_set = set()
-    bodies_for_nt = productions[nt]
-    for body, derivated_terminals in bodies_for_nt.items():
-        for symbol in body:
-            if is_non_terminal(symbol, cfg):
-                #It's a non-terminal, we need calculate the first
-                #set of it and check if epsilon in it. If epsilon is in it,
-                #we need check consequent symbol too
-                chrs = FIRST(symbol, cfg)
-                chr_set |= chrs
-                derivated_terminals |= chrs
-                if 'ε' not in chrs:
-                    break
+    def get_first_set_map(self, nt):
+        return self._FIRST[nt]
+
+    def get_first_set_of_string(self, s):
+        r = set()
+        for symbol in s:
+            chrs = set()
+            if self.is_terminal(symbol):
+                chrs.add(symbol)
             else:
-                #it is a terminal symbol, we just add it and break loop
-                chr_set.add(symbol)
-                derivated_terminals.add(symbol)
-                #skip out the loop
+                chrs = self.FIRST(symbol)
+
+            r |= chrs
+            if not chrs.contains(EPSILON):
                 break
-                
-    return chr_set
+        return r
 
-def is_terminal(symbol, cfg):
-    return symbol not in cfg.P.keys()
+    def FIRST(self, s):
+        ret = set()
+        for symbol in s.split():
+            chrs = set()
+            if self.is_terminal(symbol):
+                chrs.add(symbol)
+            else:
+                chrs = set(self._FIRST[symbol].keys())
 
-def is_non_terminal(symbol, cfg):
-    return symbol in cfg.P.keys()
+            ret |= chrs
+            if EPSILON not in chrs:
+                break
+        return ret
 
-def is_start_symbol(symbol, cfg):
-    return symbol == cfg.S
+    def FOLLOW(self, nt):
+        return self._FOLLOW[nt]
 
-
-def FOLLOW(nt, cfg):
-    chr_set = {'$'}
-    productions = cfg.P
-
-
-    rels  = {}
-    cache = {}
-    # Get direct follows for each non-terminals
-    # and deduct relations between FOLLOW set of each non-terminals
-    
-    for left, bodies in productions.items():
-        for right in bodies:
-            check_follow = False
-            last_nt      = None
-            for symbol in right:
-                if is_non_terminal(symbol, cfg):
-                    if check_follow:
-                        symbols = FIRST(symbol, cfg) - {'ε'}
-                        try:
-                            cache[last_nt] |= symbols
-                        except KeyError:
-                            cache[last_nt] = symbols
-
-                    check_follow = True
-                    last_nt = symbol
-                else:
-                    # It's terminal
-                    if check_follow:
-                        symbols = {symbol,}
-                        try:
-                            cache[last_nt] |= symbols
-                        except KeyError:
-                            cache[last_nt] = symbols
-
-                    check_follow = False
-
-            # Deduct the relations of FOLLOW sets
-            for symbol in reversed(right):
-                if is_terminal(symbol, cfg):
-                    break
-                else:
-                    #non-terminal
-                    if left != symbol:
-                        # ignore self contains
-                        try:
-                            rels[symbol].add(left)
-                        except KeyError:
-                            rels[symbol] = {left,}
-                    
-                        
-                    if 'ε' not in FIRST(symbol, cfg):
-                        break
-
-    try:
-        cache[cfg.S].add('$')
-    except KeyError:
-        cache[cfg.S] = {'$'}
-    
-
-
-    # Calculate all subset of FOLLOW(nt)
-    def lookup_relations(nt, rels, st):
-        lst = rels.get(nt, set())
-        for x in lst:
-            if x not in st:
-                st.add(x)
-                lookup_relations(x, rels, st)
-
-
-    
-    chr_set |= cache.get(nt, set())
-
-    subsets = set()
-    lookup_relations(nt, rels, subsets)
-    
-    for symbol in subsets:
-        chr_set |= cache.get(symbol, set())
-            
-
-    return chr_set        
                                     
 
-def LL1(cfg):
+class LL1():
     # FIRST
-    productions = cfg.P
-    table = {}
-    for nt in cfg.NT:
-        first_set = FIRST(nt, cfg)
-        for symbol in first_set:
-            for body, derivated_terminals in productions[nt].items():
-                if symbol == 'ε':
-                    for x in FOLLOW(nt, cfg):
-                        table[(nt, x)] = ['ε']
+    def __init__(self, cfg):
+        productions = cfg.P
+        self.table = {}
+        for nt in cfg.NT:
+            first_set = cfg.FIRST(nt)
+            first_set_map = cfg.FIRST_map(nt)
+            for symbol in first_set:
+                for body, derivated_terminals in productions[nt].items():
+                    if symbol == 'ε':
+                        for x in cfg.FOLLOW(nt):
+                            table[(nt, x)] = [EPSILON]
                         
-                else:
-                    if symbol in derivated_terminals:
-                        table[(nt, symbol)] = body
+                    else:
+                        if symbol in derivated_terminals:
+                            table[(nt, symbol)] = body
 
 
-    return table
-
-def print_table(table):
-    pprint.pprint(table)
-    rows = set()
-    cols = set()
-    for row, col in table:
-        rows.add(row)
-        cols.add(col)
+    def print_table(self):
+        table = self.table
+        pprint.pprint(table)
+        rows = set()
+        cols = set()
+        for row, col in table:
+            rows.add(row)
+            cols.add(col)
     
-    print("Constuction table:")
-    print("_____________________________________________________")
-    print("{:8s}".format(""), end="")    
-    for col in cols:
-        print("{:<15s}".format(col), end="")
-    print()
-
-    for row in rows:
-        print("{:8s}".format(row), end='')
+        print("Constuction table:")
+        print("_____________________________________________________")
+        print("{:8s}".format(""), end="")    
         for col in cols:
-            try:
-                body = table[(row,col)]
-                s = row + " -> " + " ".join(body)
-            except:
-                s = ""
-            
-            print("{:<15s}".format(s), end="")
-        print("")
+            print("{:<15s}".format(col), end="")
+        print()
 
-Item = namedtuple('Item', "head body dot")
+        for row in rows:
+            print("{:8s}".format(row), end='')
+            for col in cols:
+                try:
+                    body = table[(row,col)]
+                    s = row + " -> " + " ".join(body)
+                except:
+                    s = ""
+            
+                print("{:<15s}".format(s), end="")
+            print("")
+
 
 class LR0():
     def __init__(self, cfg):
-        self._ACTION = None
         self._GOTO = {}
         self.cfg = cfg
 
         # state is set of items
         self._state = {}
-        state = self.closure(self.cfg.S)
+        #state = self.CLOSURE(self.cfg.S)
+
+        state = self.CLOSURE2(self.cfg.S)
+
         state.add(Item(head="S'", body=(cfg.S,), dot=0))
         self._state[0] = state
         self.state_index = 0
@@ -439,7 +358,7 @@ class LR0():
                 
                 state = self._state[state_idx]
                 for X in self.get_next_goto_X(state):
-                    new_state = self.goto(state, X)
+                    new_state = self.GOTO(state, X)
                     new_state_idx = self.get_state_idx(new_state)
                     
                     if new_state_idx is None:
@@ -469,11 +388,11 @@ class LR0():
     def get_next_goto_X(self, state):
         Xs = set()
         for item in state:
-            if item.dot < len(item.body) and item.body[item.dot] != 'ε':
+            if item.dot < len(item.body) and item.body[item.dot] != EPSILON:
                 Xs.add(item.body[item.dot])
         return Xs
     
-    def goto(self, state, X):
+    def GOTO(self, state, X):
         st = set()
         for item in state:
             if item.dot == len(item.body):
@@ -482,32 +401,27 @@ class LR0():
                 item = Item(head=item.head, body=item.body, dot=item.dot+1)
                 st.add(item)
 
-        derived_items = set()
-        for X in self.get_next_goto_X(st):
-            if is_non_terminal(X, self.cfg):
-                derived_items |= self.closure(X)
-                    
-        return st | derived_items
-        
+        return self.CLOSURE(st)
+    
     def __expr__(self):
         return str(self._state) + "\n" + str(self._GOTO)
 
 
-    def closure(self, nt):
-        items = set()
-        bodies = self.cfg.P[nt]
-        for body in bodies:
-            items.add(Item(head=nt, body=body, dot=0))
-
-
+    def CLOSURE(self, items):
+        # Items represents item set
         while True:
             new_items = set()
             for item in items:
+                if item.dot >= len(item.body):
+                    continue
+                
                 symbol = item.body[item.dot]
-                if is_non_terminal(symbol, self.cfg):
-                    bodies = self.cfg.P[symbol]
+                if self.cfg.is_non_terminal(symbol):
+                    production = self.cfg.get_production(symbol)
+                    bodies = production.bodies
+                    #bodies = self.cfg.P[symbol]
                     for body in bodies:
-                        i = Item(head=symbol, body=body, dot=0)
+                        i = Item(head=symbol, body=tuple(body), dot=0)
                         if i not in items:
                             new_items.add(i)
             if not new_items:
@@ -516,13 +430,23 @@ class LR0():
                 items |= new_items
 
         return items
+    
+    def CLOSURE2(self, nt):
+        
+        production = self.cfg.get_production(nt)
+        items = production.deconstruct()
+        return self.CLOSURE(items)
 
+        
     def print(self):
         for idx, state in self._state.items():
             print("{}\t:".format(idx))
             for item in state:
                 print("\t{}".format(item))
-    
+
+class LR1():
+    pass
+
 if __name__ == '__main__':
     productions = '''
     E -> E + T | T
@@ -530,11 +454,16 @@ if __name__ == '__main__':
     F -> ( E ) | id
     '''
     cfg = CFG(productions)
+    ll = LL1(cfg)
+    ll.print()
+    
+    '''
+    cfg = CFG(productions)
     print("Calculate FIRSTs")
     for nt in ["E", "T", 'F']:
-        print("FIRST({})\t:\t{}".format(nt, cfg.get_first_set(nt)))
+        print("FIRST({})\t:\t{}".format(nt, cfg.FIRST(nt)))
 
-    '''
+
     print("Print CFG again:")
     pprint.pprint(cfg)
 
@@ -543,9 +472,10 @@ if __name__ == '__main__':
         print("FOLLOW({})\t:\t{}".format(nt, FOLLOW(nt, cfg)))
 
     r = LL1(cfg)
+    
     print_table(r)
-
+    '''
     parser = LR0(cfg)
     parser.traversal_state()
     parser.print()
-    '''
+
