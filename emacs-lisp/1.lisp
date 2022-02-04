@@ -38,3 +38,18 @@
 
 (foo 'zs)
 
+
+(defun inact (one two)
+  (interactive "r")
+  (message "we got %s and %s" one two))
+
+
+
+(interactive-form 'inact)
+
+	      
+(defun func (arg start end)
+  (interactive "P\nr") 
+  (message "Your input is: %d, %s %s" arg start end))
+
+(interactive-form 'func)
