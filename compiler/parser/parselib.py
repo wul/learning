@@ -1,4 +1,5 @@
 from collections import namedtuple
+import graphviz
 import pprint
 productions = '''                       
 E  -> T E'      
@@ -288,19 +289,18 @@ class LL1():
         self.table = {}
         for nt in cfg.NT:
             first_set = cfg.FIRST(nt)
-            first_set_map = cfg.FIRST_map(nt)
-            for symbol in first_set:
-                for body, derivated_terminals in productions[nt].items():
-                    if symbol == 'ε':
-                        for x in cfg.FOLLOW(nt):
-                            table[(nt, x)] = [EPSILON]
+            first_set_map = cfg.get_first_set_map(nt)
+            for symbol, body in first_set_map.items():
+                if symbol == EPSILON:
+                    for x in cfg.FOLLOW(nt):
+                        self.table[(nt, x)] = [EPSILON]
                         
-                    else:
-                        if symbol in derivated_terminals:
-                            table[(nt, symbol)] = body
+                else:
+                    if symbol in first_set:
+                        self.table[(nt, symbol)] = body
 
 
-    def print_table(self):
+    def print(self):
         table = self.table
         pprint.pprint(table)
         rows = set()
@@ -444,6 +444,38 @@ class LR0():
             for item in state:
                 print("\t{}".format(item))
 
+        print(" Print GOTO table")
+        print(self._GOTO)
+        
+    def view(self):
+        dot = graphviz.Digraph(name="SLR", node_attr={"shape": "plaintext"}, format="png")
+        dot.attr(size='18, 15', rankdir='LR')
+        for idx, state in self._state.items():
+            name = "I{0}".format(idx)
+
+            content = ''
+            for item in state:
+                body = [x for x in item.body]
+                body.insert(item.dot, '.')
+                    
+                content += '<tr><td align="left">{} -&gt; {}</td></tr>'.format(item.head, ' '.join(body))
+
+            content = '<tr><td style="font-weight: bold">{}</td></tr>'.format(name) + content
+            label = '''<
+            <table border="1">
+            {}
+            </table>
+            >'''.format(content)
+            print(label)
+            dot.node(name, label)
+            
+        for key, value in self._GOTO.items():
+            src = "I{}".format(key[0])
+            dst = "I{}".format(value)
+            dot.edge(src, dst, label=key[1])
+
+        dot.view()
+
 class LR1():
     pass
 
@@ -457,25 +489,10 @@ if __name__ == '__main__':
     ll = LL1(cfg)
     ll.print()
     
-    '''
-    cfg = CFG(productions)
-    print("Calculate FIRSTs")
-    for nt in ["E", "T", 'F']:
-        print("FIRST({})\t:\t{}".format(nt, cfg.FIRST(nt)))
 
-
-    print("Print CFG again:")
-    pprint.pprint(cfg)
-
-    print("Calculate FOLLOWs")        
-    for nt in ['E', "E'", "T", "T'", 'F']:
-        print("FOLLOW({})\t:\t{}".format(nt, FOLLOW(nt, cfg)))
-
-    r = LL1(cfg)
-    
-    print_table(r)
-    '''
+    print("\nPrint all states")
     parser = LR0(cfg)
     parser.traversal_state()
     parser.print()
 
+    parser.view()
