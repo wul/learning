@@ -26,10 +26,10 @@ class Stack:
         return self.lst[-1]
 
     def repr_right(self):
-        return "{} -->".format(" ".join(self.lst))
+        return "| {}".format(" ".join(self.lst))
 
     def repr_left(self):
-        return "<-- {}".format(" ".join(reversed(self.lst)))
+        return "{} |".format(" ".join(reversed(self.lst)))
     
 class Item:
     def __init__(self, head, body, dot=0, lookahead = ''):
@@ -149,7 +149,7 @@ class CFG():
         return symbol in self.NT
 
     def is_terminal(self, symbol):
-        return symbol in self.T
+        return symbol not in self.NT
 
 
     
@@ -339,23 +339,31 @@ class LL1():
                     if symbol in first_set:
                         self.table[(nt, symbol)] = body
 
-    def print_state(self, stack, s):
-        print("  {}\t\t{}".format(stack.repr_left(), s))
+    def print_state(self, stack, s, production=''):
+        print("  {:>20}\t\t{:<40}\t{} ".format(stack.repr_left(), str(s), production))
+
         
     def parse(self, s):
+        print("\nParsing string: {}".format(s))
+        print("-"*80)
         stack = Stack()
+        stack.push(ENDMARKER)
         stack.push(self.cfg.S)
 
+        parsed = False
         tokens = s.split()
+        tokens.append(ENDMARKER)
         for idx in range(len(tokens)):
             token = tokens[idx]
+            self.print_state(stack, tokens[idx:])
+            
             while True:
+                
                 top = stack.gettop()
-                self.print_state(stack, tokens[idx:])
-
                 if cfg.is_terminal(top) and top == token:
                     stack.pop()
                     break
+
 
                 try:
                     body = self.table[(top, token)]
@@ -367,18 +375,15 @@ class LL1():
                 if body != [EPSILON]:
                     for symbol in reversed(body):
                         stack.push(symbol)
+                self.print_state(stack, tokens[idx:], "{} -> {}".format(top, " ".join(body)))
         else:
+            parsed = True
+
+        self.print_state(stack, tokens[idx+1:])
+
+        if parsed:
             print("All string parsed")
-
-        while True:
-            try:
-                symbol = stack.pop()
-            except IndexError:
-                break
-            else:
-                self.print_state(stack, "")
-                assert(self.table[(symbol, ENDMARKER)] == [EPSILON])
-
+            
             
     def print(self):
         table = self.table
