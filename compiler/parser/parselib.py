@@ -11,7 +11,26 @@ F  -> ( E ) | id
 
 
 #Item = namedtuple('Item', "head body dot lookahead", defaults=('', tuple(), 0, ''))
+class Stack:
 
+    def __init__(self):
+        self.lst = []
+        
+    def push(self, o):
+        self.lst.append(o)
+
+    def pop(self):
+        return self.lst.pop()
+
+    def gettop(self):
+        return self.lst[-1]
+
+    def repr_right(self):
+        return "{} -->".format(" ".join(self.lst))
+
+    def repr_left(self):
+        return "<-- {}".format(" ".join(reversed(self.lst)))
+    
 class Item:
     def __init__(self, head, body, dot=0, lookahead = ''):
         self.head = head
@@ -305,6 +324,7 @@ class CFG():
 class LL1():
     # FIRST
     def __init__(self, cfg):
+        self.cfg = cfg
         productions = cfg.P
         self.table = {}
         for nt in cfg.NT:
@@ -319,7 +339,47 @@ class LL1():
                     if symbol in first_set:
                         self.table[(nt, symbol)] = body
 
+    def print_state(self, stack, s):
+        print("  {}\t\t{}".format(stack.repr_left(), s))
+        
+    def parse(self, s):
+        stack = Stack()
+        stack.push(self.cfg.S)
 
+        tokens = s.split()
+        for idx in range(len(tokens)):
+            token = tokens[idx]
+            while True:
+                top = stack.gettop()
+                self.print_state(stack, tokens[idx:])
+
+                if cfg.is_terminal(top) and top == token:
+                    stack.pop()
+                    break
+
+                try:
+                    body = self.table[(top, token)]
+                except KeyError:
+                    print("Stack TOP {} meet token {} failed".format(top, token))
+                    return
+
+                symbol = stack.pop()
+                if body != [EPSILON]:
+                    for symbol in reversed(body):
+                        stack.push(symbol)
+        else:
+            print("All string parsed")
+
+        while True:
+            try:
+                symbol = stack.pop()
+            except IndexError:
+                break
+            else:
+                self.print_state(stack, "")
+                assert(self.table[(symbol, ENDMARKER)] == [EPSILON])
+
+            
     def print(self):
         table = self.table
         pprint.pprint(table)
@@ -502,19 +562,31 @@ class LR1():
     pass
 
 if __name__ == '__main__':
+    productions = '''                       
+    E  -> T E'      
+    E' -> + T E' | ε
+    T  -> F T'
+    T' -> * F T' | ε
+    F  -> ( E ) | id
+    '''
+    cfg = CFG(productions)
+    ll = LL1(cfg)
+    ll.print()
+    ll.parse("id + id * id")
+
+
+    """
     productions = '''
     E -> E + T | T
     T -> T * F | F
     F -> ( E ) | id
     '''
-    cfg = CFG(productions)
-    ll = LL1(cfg)
-    ll.print()
     
-
+    cfg = CFG(productions)
     print("\nPrint all states")
     parser = LR0(cfg)
     parser.traversal_state()
     parser.print()
 
     parser.view()
+    """
