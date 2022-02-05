@@ -9,9 +9,29 @@ T' -> * F T' | ε
 F  -> ( E ) | id
 '''
 
-CFG = namedtuple('CFG', "NT T P S")
-Item = namedtuple('Item', "head body dot lookahead", defaults=('', tuple(), 0, ''))
 
+#Item = namedtuple('Item', "head body dot lookahead", defaults=('', tuple(), 0, ''))
+
+class Item:
+    def __init__(self, head, body, dot=0, lookahead = ''):
+        self.head = head
+        self.body = body
+        self.dot  = dot
+        self.lookahead = ''
+        
+    def __eq__(self, other):
+        return self.head == other.head and self.body == other.body and self.dot == other.dot and self.lookahead == other.lookahead
+
+    def __hash__(self):
+        return (self.head + str(self.body)).__hash__()
+
+
+    def __str__(self):
+        lst = [x for x in self.body]
+        lst.insert(self.dot, '.')
+        return "{} -> {}, {}".format(self.head, " ".join(lst), self.lookahead)
+
+    
 class Production:
     def __init__(self, str_exp, rank):
         self.rank = rank
@@ -22,7 +42,7 @@ class Production:
         self.parse_production_str(str_exp)
         
     def deconstruct(self):
-        return set([Item(head=self.head, body=tuple(body), dot=0) for body in self.bodies])
+        return [Item(head=self.head, body=tuple(body), dot=0) for body in self.bodies]
 
         
     def parse_production_str(self, s):
@@ -340,7 +360,7 @@ class LR0():
 
         state = self.CLOSURE2(self.cfg.S)
 
-        state.add(Item(head="S'", body=(cfg.S,), dot=0))
+        state.insert(0, (Item(head="S'", body=(cfg.S,), dot=0)))
         self._state[0] = state
         self.state_index = 0
         #self.traversal_state()
@@ -386,20 +406,22 @@ class LR0():
         return None
         
     def get_next_goto_X(self, state):
-        Xs = set()
+        Xs = []
         for item in state:
             if item.dot < len(item.body) and item.body[item.dot] != EPSILON:
-                Xs.add(item.body[item.dot])
+                t = item.body[item.dot]
+                if t not in Xs:
+                    Xs.append(t)
         return Xs
     
     def GOTO(self, state, X):
-        st = set()
+        st = []
         for item in state:
             if item.dot == len(item.body):
                 continue
             if item.body[item.dot] == X:
                 item = Item(head=item.head, body=item.body, dot=item.dot+1)
-                st.add(item)
+                st.append(item)
 
         return self.CLOSURE(st)
     
@@ -410,7 +432,7 @@ class LR0():
     def CLOSURE(self, items):
         # Items represents item set
         while True:
-            new_items = set()
+            new_items = []
             for item in items:
                 if item.dot >= len(item.body):
                     continue
@@ -418,16 +440,16 @@ class LR0():
                 symbol = item.body[item.dot]
                 if self.cfg.is_non_terminal(symbol):
                     production = self.cfg.get_production(symbol)
-                    bodies = production.bodies
-                    #bodies = self.cfg.P[symbol]
-                    for body in bodies:
-                        i = Item(head=symbol, body=tuple(body), dot=0)
+                    item_lst = production.deconstruct()
+
+                    for i in item_lst:
                         if i not in items:
-                            new_items.add(i)
+                            new_items.append(i)
+
             if not new_items:
                 break
             else:
-                items |= new_items
+                items.extend(new_items)
 
         return items
     
