@@ -26,10 +26,10 @@ class Stack:
         return self.lst[-1]
 
     def repr_right(self):
-        return "| {}".format(" ".join(self.lst))
+        return "| {}".format(" ".join([str(x) for x in self.lst]))
 
     def repr_left(self):
-        return "{} |".format(" ".join(reversed(self.lst)))
+        return "{} |".format(" ".join([str(x) for x in reversed(self.lst)]))
     
 class Item:
     def __init__(self, head, body, dot=0, lookahead = ''):
@@ -50,6 +50,11 @@ class Item:
         lst.insert(self.dot, '.')
         return "{} -> {}, {}".format(self.head, " ".join(lst), self.lookahead)
 
+    def __expr__(self):
+        lst = [x for x in self.body]
+        lst.insert(self.dot, '.')
+        return "{} -> {}, {}".format(self.head, " ".join(lst), self.lookahead)
+    
     
 class Production:
     def __init__(self, str_exp, rank):
@@ -416,6 +421,7 @@ class LL1():
 
 class LR0():
     def __init__(self, cfg):
+        self._ACTION = {}
         self._GOTO = {}
         self.cfg = cfg
 
@@ -428,31 +434,43 @@ class LR0():
         state.insert(0, (Item(head="S'", body=(cfg.S,), dot=0)))
         self._state[0] = state
         self.state_index = 0
-        #self.traversal_state()
+        self.traversal_state()
 
     def traversal_state(self):
-        pool = {self.state_index}
+        pool = [self.state_index]
         processed = set()
         
         while True:
-            new_states = set()
+            new_states = []
             for state_idx in pool:
                 if state_idx in processed:
                     continue
                 
                 
                 state = self._state[state_idx]
+                for item in state:
+                    if len(item.body) == item.dot:  #already parsed to the end of the production
+                        if item.head == "S'" and item.body[-1] == self.cfg.S:
+                            self._ACTION[state_idx, ENDMARKER] = ('Accept',)
+                            continue
+                        
+                        for t in self.cfg.FOLLOW(item.head):
+                            self._ACTION[state_idx, t] = ('r', item)
+                        
                 for X in self.get_next_goto_X(state):
-                    new_state = self.GOTO(state, X)
+                    new_state = self.calc_next_state(state, X)
                     new_state_idx = self.get_state_idx(new_state)
                     
                     if new_state_idx is None:
                         self.state_index += 1
                         new_state_idx = self.state_index
                         self._state[new_state_idx] = new_state
-                        new_states.add(new_state_idx)
-                        
-                    self._GOTO[state_idx, X] = new_state_idx
+                        new_states.append(new_state_idx)
+
+                    if self.cfg.is_terminal(X):
+                        self._ACTION[state_idx, X] = ('s', new_state_idx)
+                    else:
+                        self._GOTO[state_idx, X] = new_state_idx
                     
                 processed.add(state_idx)
 
@@ -461,7 +479,7 @@ class LR0():
             if not new_states:
                 break
             else:
-                pool |= new_states
+                pool.extend(new_states)
         
     def get_state_idx(self, state):
         for idx, st in self._state.items():
@@ -479,7 +497,7 @@ class LR0():
                     Xs.append(t)
         return Xs
     
-    def GOTO(self, state, X):
+    def calc_next_state(self, state, X):
         st = []
         for item in state:
             if item.dot == len(item.body):
@@ -526,13 +544,22 @@ class LR0():
 
         
     def print(self):
+        '''
         for idx, state in self._state.items():
             print("{}\t:".format(idx))
             for item in state:
                 print("\t{}".format(item))
+        '''
+        print("\n Print state table")
+        for state_idx, items in self._state.items():
+            print(state_idx)
+            for item in items:
+                print("\t{}".format(item))
 
-        print(" Print GOTO table")
-        print(self._GOTO)
+        print("\n Print GOTO table")
+        pprint.pprint(self._GOTO)
+        print("\n Print ACTION table")
+        pprint.pprint(self._ACTION)
         
     def view(self):
         dot = graphviz.Digraph(name="SLR", node_attr={"shape": "plaintext"}, format="png")
@@ -561,7 +588,88 @@ class LR0():
             dst = "I{}".format(value)
             dot.edge(src, dst, label=key[1])
 
+        for key, value in self._ACTION.items():
+            src = "I{}".format(key[0])
+            if value[0] == 's': #shift
+                dst = "I{}".format(value[1])
+                dot.edge(src, dst, label=key[1])
+
         dot.view()
+
+    def GOTO(self, state, X):
+        try:
+            return self._GOTO[state, X]
+        except KeyError:
+            return None
+        
+    def ACTION(self, state, t):
+        try:
+            return self._ACTION[state, t]
+        except KeyError:
+            return None
+
+    def get_item_of_reduce(self, state_idx):
+        items = self._state[state_idx]
+        for item in items:
+            if len(item.body) == item.dot:
+                return item
+        return None
+
+    def print_state(self, stack, stack2,  production=''):
+        print("  {:<20}\t\t{:<40}\t{} ".format(stack.repr_right(), stack2.repr_right(), production))
+
+    def parse(self, s):
+        print("\nParse string: {}".format(s))
+        
+        s = s.split()
+        
+        stack = Stack()
+        stack_symbol = Stack()
+        
+        cache = []
+        # Push start state
+        state = 0
+        stack.push(state)
+        stack_symbol.push(ENDMARKER)
+
+        idx = 0
+        s.append(ENDMARKER)
+        t = s[idx]
+        while True:
+            state = stack.gettop()
+            res = self.ACTION(state, t)
+            self.print_state(stack, stack_symbol, "")            
+            if res == None:
+                raise Exception('impossible')
+            elif res[0] == 's':
+                stack_symbol.push(t)
+                stack.push(res[1])
+                idx += 1;
+                if idx >= len(s):
+                    break
+                t = s[idx]
+            elif res[0] == 'r':
+                item = res[1]
+                head = item.head
+                body = item.body
+
+                length = len(item.body)
+                while length > 0:
+                    stack_symbol.pop()
+                    stack.pop()
+                    length -= 1
+
+                stack_symbol.push(head)
+                state = stack.gettop()
+                stack.push(self.GOTO(state, head))
+            elif res[0] == "Accept":
+                break
+            else:
+                raise Exception("fail")
+                    
+
+        print("All parsed")
+                
 
 class LR1():
     pass
@@ -580,7 +688,7 @@ if __name__ == '__main__':
     ll.parse("id + id * id")
 
 
-    """
+
     productions = '''
     E -> E + T | T
     T -> T * F | F
@@ -588,10 +696,8 @@ if __name__ == '__main__':
     '''
     
     cfg = CFG(productions)
-    print("\nPrint all states")
     parser = LR0(cfg)
-    parser.traversal_state()
     parser.print()
-
+    parser.parse("id * id + id")
     parser.view()
-    """
+
