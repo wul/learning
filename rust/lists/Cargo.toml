@@ -1,6 +1,5 @@
-cargo-features = ["edition2021"]
 [package]
-name = "rust"
+name = "lists"
 version = "0.1.0"
 edition = "2021"
 
