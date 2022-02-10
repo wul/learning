@@ -45,23 +45,7 @@ impl<T> Stack<T> {
 	}
 	return None;
 
-	/*
-	if self.top == None {
-	    return None
-	}
 
-	let val = &(self.top.val);
-	return Some(val);
-*/
-	/*
-	let val = self.top.take();
-	match val {
-	    None => None,
-	    Some(mut x) => {
-		Some(&x.val)
-	    },
-	}
-	*/
     }
 }
 
