@@ -167,43 +167,45 @@ class CFG():
         idx = self.loc[nt]
         production = self.P[idx]
 
-        pool = {nt,}
         
         path = []
         def walk(nt, path):
+            print( "walk {} against {}".format(nt, path));
             if nt in path:
                 #loop, ignore
                 return set()
-            
+
             index = self.loc[nt]
             production = self.P[index]
-            chr_set = set()
+            symbol_set = set()
             for body in production.bodies:
                 for symbol in body:
                     if self.is_non_terminal(symbol):
                         new_idx = self.loc[symbol]
-                        chrs = walk(symbol, nt)
-                        for char in chrs:
+
+                        path.append(nt)
+                        symbols = walk(symbol, path)
+                        for char in symbols:
                             self.add_to_first_set(nt, char, body)
 
                             
-                        chr_set |= chrs
-                        if not EPSILON in chrs:
+                        symbol_set |= symbols
+                        if not EPSILON in symbols:
                             break
                     else:
                         self.add_to_first_set(nt, symbol, body)
-                        chr_set.add(symbol)
+                        symbol_set.add(symbol)
                         break
 
 
-            return chr_set
+            return symbol_set
         
 
         walk(nt, path)
 
 
     def calculate_follow_set(self, nt):
-        chr_set = {'$'}
+        symbol_set = {'$'}
         productions = self.P
 
 
@@ -278,16 +280,16 @@ class CFG():
 
 
     
-        chr_set |= cache.get(nt, set())
+        symbol_set |= cache.get(nt, set())
 
         subsets = set()
         lookup_relations(nt, rels, subsets)
     
         for symbol in subsets:
-            chr_set |= cache.get(symbol, set())
+            symbol_set |= cache.get(symbol, set())
             
 
-        self._FOLLOW[nt] = chr_set
+        self._FOLLOW[nt] = symbol_set
         
     
     def get_first_set_map(self, nt):
@@ -296,28 +298,28 @@ class CFG():
     def get_first_set_of_string(self, s):
         r = set()
         for symbol in s:
-            chrs = set()
+            symbols = set()
             if self.is_terminal(symbol):
-                chrs.add(symbol)
+                symbols.add(symbol)
             else:
-                chrs = self.FIRST(symbol)
+                symbols = self.FIRST(symbol)
 
-            r |= chrs
-            if not chrs.contains(EPSILON):
+            r |= symbols
+            if not symbols.contains(EPSILON):
                 break
         return r
 
     def FIRST(self, s):
         ret = set()
         for symbol in s.split():
-            chrs = set()
+            symbols = set()
             if self.is_terminal(symbol):
-                chrs.add(symbol)
+                symbols.add(symbol)
             else:
-                chrs = set(self._FIRST[symbol].keys())
+                symbols = set(self._FIRST[symbol].keys())
 
-            ret |= chrs
-            if EPSILON not in chrs:
+            ret |= symbols
+            if EPSILON not in symbols:
                 break
         return ret
 
@@ -427,9 +429,9 @@ class LR0():
 
         # state is set of items
         self._state = {}
-        #state = self.CLOSURE(self.cfg.S)
+        #state = self.closure(self.cfg.S)
 
-        state = self.CLOSURE2(self.cfg.S)
+        state = self.closure2(self.cfg.S)
 
         state.insert(0, (Item(head="S'", body=(cfg.S,), dot=0)))
         self._state[0] = state
@@ -458,7 +460,7 @@ class LR0():
                             self._ACTION[state_idx, t] = ('r', item)
                         
                 for X in self.get_next_goto_X(state):
-                    new_state = self.calc_next_state(state, X)
+                    new_state = self.goto(state, X)
                     new_state_idx = self.get_state_idx(new_state)
                     
                     if new_state_idx is None:
@@ -497,7 +499,7 @@ class LR0():
                     Xs.append(t)
         return Xs
     
-    def calc_next_state(self, state, X):
+    def goto(self, state, X):
         st = []
         for item in state:
             if item.dot == len(item.body):
@@ -506,13 +508,13 @@ class LR0():
                 item = Item(head=item.head, body=item.body, dot=item.dot+1)
                 st.append(item)
 
-        return self.CLOSURE(st)
+        return self.closure(st)
     
     def __expr__(self):
         return str(self._state) + "\n" + str(self._GOTO)
 
 
-    def CLOSURE(self, items):
+    def closure(self, items):
         # Items represents item set
         while True:
             new_items = []
@@ -536,11 +538,11 @@ class LR0():
 
         return items
     
-    def CLOSURE2(self, nt):
+    def closure2(self, nt):
         
         production = self.cfg.get_production(nt)
         items = production.deconstruct()
-        return self.CLOSURE(items)
+        return self.closure(items)
 
         
     def print(self):
@@ -669,6 +671,7 @@ class LR0():
                     
 
         print("All parsed")
+        return 0
                 
 
 class LR1():
