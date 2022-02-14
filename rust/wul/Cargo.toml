@@ -1,8 +1,16 @@
 [package]
-name = "lists"
+name = "wul"
 version = "0.1.0"
 edition = "2021"
+authors = ["Li Wu <li.koun@gmail.com>"]
 
+[lib]
+name = "wul"
+path = "src/lib.rs"
+
+#[bin]
+#name = "mybin"
+#path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

@@ -55,9 +55,14 @@ impl<T> List<T> {
 
 
     pub fn peek(&self) -> Option<&T> {
-	self.head.as_ref().map(|node| {
+	/*we could not do it in this way 
+	self.head.map(|node| &node.elem)
+	//  ^^^^^^^^^^ returns a reference to data owned by the current function
+	 */
+
+	self.head.as_ref().map(|node| 
 	    &node.elem
-	})
+	)
     }
     pub fn peek_mut(&mut self) -> Option<&mut T> {
 	self.head.as_mut().map(|node| {
@@ -152,5 +157,7 @@ mod tests {
 	assert_eq!(iter.next(), Some(2));
 	assert_eq!(iter.next(), Some(1));
 	assert_eq!(iter.next(), None);
+
+
     }
 }
