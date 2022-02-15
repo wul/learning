@@ -66,5 +66,9 @@ fn main() {
     assert_eq!(opt.unwrap(), 3);
 
 
+    let v = Option::<u32>::None;
+    assert_eq!(v.clone(), None);
 
+    let v = Some(5);
+    assert_eq!(v.clone(), Option::Some(5));
 }
