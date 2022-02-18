@@ -1,46 +1,53 @@
 use std::hash::{Hash, Hasher};
 use std::collections::{HashSet, HashMap};
-mod stack;
-use stack::Stack;
 use std::mem;
 
 
 
-type Symbol = String;
-type Body = Vec<Symbol>;
+pub type Symbol<'a> = &'a str;
 
-#[derive(Debug, Copy, Clone)]
-struct BodyIndex(u32, u32);
+type Body<'a> = Vec<Symbol<'a>>;
+
+    
+struct Token<'a, T> {
+    token_type: u32,
+    attr_value: Option<T>,
+    symbol:     Symbol<'a>,
+}
 
 
-const EPSILON:&str   = "ε";
-const ENDMARKER:&str = "$";
 
-#[derive(Debug)]
-pub struct Production{
+pub const EPSILON:&str   = "ε";
+pub const ENDMARKER:&str = "$";
+
+#[derive(Debug, Clone)]
+pub struct Production<'a>{
     rank: usize,
-    head: Symbol, 
-    bodies: Vec<Body>,
+    head: Symbol<'a>, 
+    bodies: Vec<Body<'a>>,
 }
 
-#[derive(Debug)]
-pub struct Item{
-    head:  Symbol,
-    body:  BodyIndex,
-    dot:   u32,
-    lookahead: Vec<Symbol>,
+#[derive(Debug, Eq, Clone)]
+pub struct Item<'a>{
+    pub head:  Symbol<'a>,
+    pub body:  Body<'a>,
+    pub dot:   usize,
+    pub lookahead: Vec<Symbol<'a>>,
 }
 
-#[derive(Debug)]
-pub struct CFG {
-    pub S:  Symbol,
-    pub T:  HashSet<Symbol>,
-    pub NT: HashSet<Symbol>,
-    pub P:  Vec<Production>,
 
-    loc : HashMap<Symbol, usize>,
-    _FIRST: HashMap<Symbol, HashMap<Symbol, BodyIndex>>,
-    _FOLLOW: HashMap<Symbol, HashSet<Symbol>>,
+pub type State<'a> = Vec<Item<'a>>;
+
+#[derive(Debug)]
+pub struct CFG<'a> {
+    pub S:  Symbol<'a>,
+    pub T:  HashSet<Symbol<'a>>,
+    pub NT: HashSet<Symbol<'a>>,
+    pub P:  Vec<Production<'a>>,
+
+    loc : HashMap<Symbol<'a>, usize>,
+    _FIRST: HashMap<Symbol<'a>, HashMap<Symbol<'a>, Body<'a>>>,
+    _FOLLOW: HashMap<Symbol<'a>, HashSet<Symbol<'a>>>,
 }
 
 
@@ -68,11 +75,11 @@ fn body2item (head: Symbol, body: &Vec<Symbol>) -> Item {
 }
 */
 
-impl Production {
-    pub fn new<'a>(rank: usize, s: &'a str) -> Self {
+impl<'a> Production<'a> {
+    pub fn new(rank: usize, s: &'a str) -> Self {
 	let mut p = Production {
 	    rank,
-	    head: "".to_string(),
+	    head: "",
 	    bodies: Vec::new(),
 	};
 
@@ -80,60 +87,65 @@ impl Production {
 	return p;
     }
 
-    pub fn parse (&mut self, s: &str) {
+    pub fn parse (&mut self, s: &'a str) {
 	let v =  s.split("->").collect::<Vec<&str>>();
-	self.head = v[0].trim().to_string();
+	self.head = v[0].trim();
 	for body_str in v[1].trim().split("|") {
 	    let mut body = Vec::new();
 	    for token_str in body_str.split_whitespace() {
-		body.push(token_str.trim().to_string());
+		body.push(token_str.trim());
 	    }
 	    self.bodies.push(body);
 	}
-    }    
+    }
+
+    pub fn deconstruct(&self) -> Vec<Item> {
+	self.bodies.iter().map(|x| Item {head:self.head, body:x.clone(), dot:0, lookahead:Vec::new()}).collect::<Vec<Item>>()
+    }
 }
 
-impl PartialEq for Production {
+impl<'a> PartialEq for Production<'a>{
     fn eq(&self, other: &Production) -> bool{
 	return self.rank == other.rank && self.head == other.head;
     }
 
 }
 
-impl Hash for Production {
+impl<'a> Hash for Production<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.rank.hash(state);
         self.head.hash(state);
     }
 }
 
-impl PartialEq for Item {
+impl<'a> PartialEq for Item<'a> {
     fn eq(&self, other: &Item)->bool {
 	return self.head == other.head &&
-	    self.body.0 == other.body.0 &&
-	    self.body.1 == other.body.1 &&
+	    self.body ==  other.body &&
 	    self.dot == other.dot &&
 	    self.lookahead == other.lookahead;
     }
 }
 
-impl Hash for Item {
+impl<'a> Hash for Item<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
 	self.head.hash(state);
-	self.body.0.hash(state);
-	self.body.1.hash(state);
+	for x in self.body.iter() {
+	    x.hash(state);
+	}
+
 	self.dot.hash(state);
     }
 }
 
 
-impl CFG  {
-    fn new(s: &str) -> Self {
+impl<'a> CFG<'a>  {
+    fn new(s: &'a str) -> Self {
 	let mut cfg = Self {
 	    T: HashSet::new(),
 	    NT: HashSet::new(),
 	    P: Vec::new(),
-	    S: "".to_string(),
+	    S: "",
 	    loc: HashMap::new(),
 	    _FIRST:HashMap::new(),
 	    _FOLLOW:HashMap::new(),
@@ -143,7 +155,7 @@ impl CFG  {
 	return cfg;
     }
 
-    fn normalize(&mut self, s: &str) {
+    pub fn normalize(&mut self, s: &'a str) {
 	let mut idx:usize = 0;
 	let symbol_set = s.replace("->", "").replace("|", " ").split_whitespace();
 	//let symbol_set = symbol_set.clone().collect::<HashSet<Symbol>>();
@@ -157,10 +169,10 @@ impl CFG  {
 	    let production = Production::new(idx, line);
 	    
 	    if self.S.is_empty() {
-		self.S = production.head.clone();
+		self.S = production.head;
 	    }
-	    self.NT.insert(production.head.clone());	    
-	    self.loc.insert(production.head.clone(), idx);
+	    self.NT.insert(production.head);	    
+	    self.loc.insert(production.head, idx);
 	    self.P.push(production);
 
 	    idx += 1;
@@ -173,15 +185,15 @@ impl CFG  {
 
     }
 
-    fn is_non_terminal(&self, symbol: &Symbol) -> bool {
+    pub fn is_non_terminal(&self, symbol: Symbol) -> bool {
 	return self.NT.contains(symbol);
     }
 
-    fn is_terminal(&self, symbol: &Symbol) -> bool {
+    pub fn is_terminal(&self, symbol: Symbol) -> bool {
 	return !self.is_non_terminal(symbol);
     }
 
-    fn get_production(&self, symbol: &Symbol)-> &Production {
+    pub fn get_production(&self, symbol: Symbol)-> &Production {
 	if let Some(idx) = self.loc.get(symbol) {
 	    let production = &self.P[*idx];
 	    return production;
@@ -190,12 +202,14 @@ impl CFG  {
 	}
     }
 
-    fn first_set(&self, beta: &Vec<Symbol>) -> HashSet<Symbol> {
+
+
+    pub fn first_set(&self, beta: &Vec<Symbol<'a>>) -> HashSet<Symbol<'a>> {
 
 	let mut symbols = HashSet::<Symbol>::new();
-	for symbol in beta.into_iter() {
+	for symbol in beta.iter() {
 	    if self.is_terminal(symbol) {
-		symbols.insert(symbol.clone());
+		symbols.insert(symbol);
 		break;
 	    } else {
 		match self._FIRST.get(symbol) {
@@ -203,9 +217,9 @@ impl CFG  {
 			//does not work
 			//m.keys().map(|x| symbols.insert(x.clone()));
 			for x in m.keys() {
-			    symbols.insert(x.clone());
+			    symbols.insert(x);
 			}
-			if !symbols.contains(&EPSILON.to_string()) {
+			if !symbols.contains(&EPSILON) {
 			    break;
 			}
 		    }
@@ -219,28 +233,28 @@ impl CFG  {
 	return symbols;
     }
     
-    fn set_first_set(&mut self, nt: Symbol, symbol_set: HashSet<Symbol>, bi: BodyIndex) {
+    pub fn set_first_set(&mut self, nt: Symbol<'a>, symbol_set: HashSet<Symbol<'a>>, body:  Body<'a>) {
 	
 	if let Some(m) = self._FIRST.get_mut(&nt) {
 	    for x in symbol_set.into_iter() {
-		m.insert(x, bi);
+		m.insert(x, body.clone());
 	    };
 	} else {
 	    let mut  m = HashMap::new();
 	    for x in symbol_set.into_iter() {			
-		m.insert(x, bi);
+		m.insert(x, body.clone());
 	    }
-	    self._FIRST.insert(nt.clone(), m);
+	    self._FIRST.insert(nt, m);
 	}
 
     }
 
-    fn get_first_set(&self, nt: &Symbol) -> HashSet<Symbol>{
+    pub fn get_first_set(&self, nt: Symbol) -> HashSet<Symbol>{
 	let mut set = HashSet::<Symbol>::new();
 	    
 	if let Some(m) = self._FIRST.get(nt) {
 	    for x in m.keys() {
-		set.insert(x.clone());
+		set.insert(x);
 	    };
 	}
 
@@ -248,56 +262,45 @@ impl CFG  {
 
     }
 
-    fn print_first(&self) {
+    pub fn print_first(&self) {
 	for nt in self.NT.iter() {
 	    println!("FIRST of {}\t:\t{:?}", nt, self.get_first_set(nt));
 	}
     }
     
-    fn calculate_first_set(&mut self) {
-	
-	let mut non_terminals = HashSet::new();
-	//why it does not work
-	//self.NT.into_iter().map(|x| non_terminals.insert(x.clone()));
-	for x in self.NT.iter() {
-	    non_terminals.insert(x.clone());
-	}
-	println!("{:?}", self.NT);	
-	println!("{:?}", non_terminals);
+    pub fn calculate_first_set(&mut self) {
+	//Get all non-terminals
+	let non_terminals = self.NT.iter().map(|x| *x).collect::<HashSet::<Symbol>>().clone();
+
 	loop {
 	    let mut found_new = false;
 
 	    for X in non_terminals.iter() {
-
-		let mut productions = std::mem::take(&mut self.P);
-		let mut pidx = 0;
+		let productions = std::mem::take(&mut self.P);
 
 		for production in productions.iter() {
+		//for production in self.P.iter() {		    
 		    if production.head != *X {
-			pidx += 1;
 			continue
 		    }
 
-		    let mut idx = 0;
-
 		    for body in production.bodies.iter() {
 			let beta = body;
+
 			println!("check head {} against {:?}", X, beta);
 			let symbol_set = self.first_set(beta);
 			println!("first set:{:?}", symbol_set);
-			if !symbol_set.is_empty() && !symbol_set.is_subset(&self.get_first_set(X)){
-			    let bi = BodyIndex(pidx, idx);
-			    self.set_first_set(X.clone(), symbol_set, bi);
+			if !symbol_set.is_empty() && !symbol_set.is_subset(&self.get_first_set(*X)){
+			    
+			    self.set_first_set(*X, symbol_set, beta.clone());
+
 			    found_new = true;
 			}
-			idx += 1;
+
 		    }
-		    pidx += 1;
-		
+
 		}
 		self.P = productions;
-		
-		
 	    }
 
 	    if !found_new  {
@@ -307,7 +310,7 @@ impl CFG  {
 	}
     }
 
-    fn calculate_follow_set(&self) {
+    pub fn calculate_follow_set(&self) {
     }
 }
 
