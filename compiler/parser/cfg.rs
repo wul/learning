@@ -262,7 +262,38 @@ impl<'a> CFG<'a>  {
 
     }
 
-    pub fn print_first(&self) {
+
+    fn FIRST(self, beta: Vec<Symbol>) -> HashSet<Symbol> {
+	let mut ret = HashSet::<Symbol>::new();
+	for symbol in beta.iter() {
+	    let mut symbols = HashSet::<Symbol>::new();
+
+	    if self.is_terminal(symbol) {
+		symbols.insert(symbol.clone());
+	    } else {
+		if let Some(dct) = self._FIRST.get(symbol) {
+		    //dct is a reference to hashmap
+		    symbols = dct.keys().map(|x| x.clone()).collect::<HashSet<Symbol>>();
+		    //		    		symbols = HashSet::from(self._FIRST.get(symbol).map(|v| v.into_keys().collect()));
+
+		}
+	    }
+
+	    symbols.iter().for_each(|x| {ret.insert(x.clone());});
+
+
+	    if !symbols.contains(EPSILON) {
+		break
+	    }
+	}
+
+	return ret;
+    }
+	    
+		
+	    
+	
+    fn print_first(&self) {
 	for nt in self.NT.iter() {
 	    println!("FIRST of {}\t:\t{:?}", nt, self.get_first_set(nt));
 	}
@@ -328,6 +359,7 @@ fn main() {
     let mut cfg = CFG::new(PRODUCTIONS);
     cfg.print_first();
 
+    println!("FIRST for {} \n{:?}", "E", cfg.FIRST(vec!["E".to_string()]));
 
 
     let productions = "

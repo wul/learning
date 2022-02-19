@@ -76,7 +76,7 @@ class TestLR0(unittest.TestCase):
             
     def test_closure(self):
         lr0 = LR0(self.cfg)
-        items = lr0.CLOSURE2("E")
+        items = lr0.closure2("E")
         #import pdb;pdb.set_trace()
         self.assertEqual(items, [Item(head="E", body=("T", "E'"), dot=0),
                                  Item(head="T", body=("F", "T'"), dot=0),
@@ -89,14 +89,14 @@ class TestLR0(unittest.TestCase):
 
         I0 = self.cfg.get_production("E").deconstruct()
         I0.insert(0, Item(head="S'", body=(self.cfg.S,), dot=0))
-        lr0.CLOSURE(I0)
+        lr0.closure(I0)
         
         Xs = lr0.get_next_goto_X(I0)
         self.assertEqual(Xs, ["E", "T", "F", "(", "id"])
 
     def test_get_state_idx(self):
         lr0 = LR0(self.cfg)
-        I0 = lr0.CLOSURE2("E")
+        I0 = lr0.closure2("E")
 
         idx = lr0.get_state_idx(I0)
         self.assertEqual(idx, None)
@@ -105,7 +105,7 @@ class TestLR0(unittest.TestCase):
         idx = lr0.get_state_idx(I0)
         self.assertEqual(idx, 0)
         
-    def test_calc_next_state(self):
+    def test_goto(self):
         productions = '''
         E -> E + T | T
         T -> T * F | F
@@ -113,14 +113,23 @@ class TestLR0(unittest.TestCase):
         '''
         self.cfg = CFG(productions)
         lr0 = LR0(self.cfg)
-        I0 = lr0.CLOSURE2("E")
+        I0 = lr0.closure2("E")
         I0.insert(0, Item(head="S'", body=(self.cfg.S,), dot=0))
 
-        I1 = lr0.calc_next_state(I0, "E")
+        I1 = lr0.goto(I0, "E")
 
         self.assertEqual(I1, [Item(head="S'", body=("E",), dot=1),
                               Item(head="E", body=("E", "+", "T"), dot=1),
                               ])        
+    def test_parse(self):
+        productions = '''
+        E -> E + T | T
+        T -> T * F | F
+        F -> ( E ) | id
+        '''
+        cfg = CFG(productions)
+        parser = LR0(cfg)
+        self.assertEqual(parser.parse(" id * id + id"), 0)
 
     
 if __name__ == '__main__':
