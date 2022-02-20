@@ -178,10 +178,10 @@ impl<'a> CFG<'a>  {
 	    idx += 1;
 	}
 
-	//self.T = symbol_set.different(self.NT);
+	//FIRST should be calculated firstly
 	self.calculate_first_set();
 	self.calculate_follow_set();
-	
+
 
     }
 
@@ -262,27 +262,34 @@ impl<'a> CFG<'a>  {
 
     }
 
-
-    fn FIRST(self, beta: Vec<Symbol>) -> HashSet<Symbol> {
+    fn FIRST2(&self, symbol: Symbol<'a>) -> HashSet<Symbol<'a>> {
+	let v = vec![symbol];
+	self.FIRST(v)
+    }
+	
+    fn FIRST(&self, beta: Vec<Symbol<'a>>) -> HashSet<Symbol<'a>> {
 	let mut ret = HashSet::<Symbol>::new();
 	for symbol in beta.iter() {
 	    let mut symbols = HashSet::<Symbol>::new();
-
-	    if self.is_terminal(symbol) {
-		symbols.insert(symbol.clone());
+	    let mut can_exit = false;
+	    if self.is_terminal(*symbol) {
+		symbols.insert(*symbol);
 	    } else {
 		if let Some(dct) = self._FIRST.get(symbol) {
 		    //dct is a reference to hashmap
-		    symbols = dct.keys().map(|x| x.clone()).collect::<HashSet<Symbol>>();
-		    //		    		symbols = HashSet::from(self._FIRST.get(symbol).map(|v| v.into_keys().collect()));
+		    symbols = dct.keys().map(|x| *x).collect::<HashSet<Symbol>>();
+		    
+		    if symbols.contains(&EPSILON) {
+			can_exit = true;
+		    }
 
 		}
 	    }
 
-	    symbols.iter().for_each(|x| {ret.insert(x.clone());});
+	    symbols.into_iter().for_each(|x| {ret.insert(x);});
 
 
-	    if !symbols.contains(EPSILON) {
+	    if can_exit {
 		break
 	    }
 	}
@@ -340,8 +347,148 @@ impl<'a> CFG<'a>  {
 
 	}
     }
+    pub fn calc_follow_set_relations(&self, left: Symbol<'a>, right: &Body<'a>, rels: &mut HashMap<Symbol<'a>, HashSet::<Symbol<'a>>>) {
+	//deduct the relations of FOLLOW sets
+	for &symbol in right.iter().rev() {
+	    if self.is_terminal(symbol) {
+		break;
+	    } else {
+		if left != symbol {
+		    if let Some(mut rel) = rels.get_mut(symbol) {
+			println!("Insert deps: {} dep {}", symbol, left);				
+			rel.insert(left);
+		    } else {
+			println!("Insert deps: {} dep {}", symbol, left);
+			rels.insert(symbol, HashSet::from([left]));
+		    }
+		}
+		if !self.FIRST2(symbol).contains(&EPSILON) {
+		    break;
+		}
+	    }	    
+	}
+	
+    }
+    
+    pub fn calc_direct_suffix(&self, right: &Body<'a>, cache: &mut HashMap<Symbol<'a>, HashSet::<Symbol<'a>>>) {
+	let mut check_follow = false;
+	let mut last_nt = "";
+	for &symbol in right.iter() {
+	    let mut symbols = HashSet::<Symbol<'a>>::new();
 
-    pub fn calculate_follow_set(&self) {
+	    if self.is_non_terminal(symbol) {
+		if check_follow {
+		    symbols = self.FIRST2(symbol);
+		    symbols.remove(&EPSILON);
+		    
+		    if !last_nt.is_empty() {
+			if let Some(mut ca) = cache.get_mut(&last_nt){
+			    symbols.iter().for_each(|&x| {ca.insert(x);});
+			} else {
+			    cache.insert(last_nt, symbols);
+			}
+			
+		    }
+		}
+		check_follow = true;
+		last_nt = symbol;
+		
+	    } else { //check it's a T/NT
+		if check_follow {
+		    symbols.insert(symbol);
+		    if !last_nt.is_empty() {
+			if let Some(mut ca) = cache.get_mut(&last_nt) {
+			    symbols.iter().for_each(|&x| {ca.insert(x);});
+			} else {
+			    cache.insert(last_nt, symbols);
+			}
+		    }
+		}
+		
+		check_follow = false;
+	    }
+	    
+	}	
+    }
+
+    pub fn build_full_follow_set_deps(&self, nt: Symbol<'a>, xx ) {
+    }
+
+    pub fn calculate_follow_set(&mut self) {
+	println!("NT set {:?}", self.NT);	
+	let mut rels:HashMap::<Symbol<'a>, HashSet<Symbol<'a>>> = HashMap::new();
+	let mut cache: HashMap<Symbol<'a>, HashSet<Symbol<'a>>> = HashMap::new();
+
+	//Build direct suffixes and follow set relations first
+	for production in self.P.iter() {
+	    for right in production.bodies.iter() {
+		self.calc_direct_suffix(right, &mut cache);
+		self.calc_follow_set_relations(production.head, right, &mut rels);
+	    }
+	}
+    
+	println!("DEPS table are {:?}", rels);
+	println!("cache table are {:?}", cache);
+
+
+	match cache.get_mut(&self.S) {
+	    Some(mut ca) => {ca.insert(ENDMARKER);},
+	    None => {cache.insert(self.S, HashSet::from([ENDMARKER]));},
+	    
+	}
+    
+    
+	// Calculate all subset of FOLLOW
+	for &nt in self.NT.clone().iter() {	
+	    let mut st = HashSet::new();
+	    st.insert(nt);
+	    
+	    let mut swap = st.clone();
+	    loop {
+		let tmp = swap.clone();
+		swap = HashSet::new();
+		for &sym in tmp.iter() {
+		    if let Some(v) = rels.get(sym) {
+		    for &x in v.iter() {
+			swap.insert(x);
+		    }
+		    }
+		}
+		
+		if swap.len() == 0 {
+		    break;
+	    } else {
+		    swap.iter().for_each(|&x| {st.insert(x);});
+		}
+		
+	    }
+
+
+	    let mut symbol_set = HashSet::new();
+	    if nt == self.S {
+		symbol_set.insert(ENDMARKER);
+	    }
+	    
+	    cache.get(&nt).map(|v| v.iter().for_each(|&t| {symbol_set.insert(t);}));
+	    println!("nt {}, st is {:?}", nt, st);
+	    for symbol in st.iter() {
+		if let Some(v) = cache.get(symbol) {
+		    println!("add cache: symbol {}, v {:?}", symbol, v);
+		    v.iter().for_each(|&t| {symbol_set.insert(t);});
+		}
+	    }
+	    println!("symbol_set: {:?}", symbol_set);
+	    self._FOLLOW.insert(nt, symbol_set);	    
+        }
+    }
+
+    fn FOLLOW(&self, nt: Symbol<'a>) -> HashSet<Symbol<'a>>{
+	let mut r = HashSet::new();
+	if let Some(v) = self._FOLLOW.get(nt) {
+	    v.iter().for_each(|&x| {r.insert(x); });
+	}
+
+	r
     }
 }
 
@@ -359,7 +506,7 @@ fn main() {
     let mut cfg = CFG::new(PRODUCTIONS);
     cfg.print_first();
 
-    println!("FIRST for {} \n{:?}", "E", cfg.FIRST(vec!["E".to_string()]));
+    println!("FIRST for {} \n{:?}", "E", cfg.FIRST(vec!["E"]));
 
 
     let productions = "
@@ -382,5 +529,39 @@ mod tests {
     fn test_parse_string() {
 
 	assert_eq!(1,1);
+    }
+
+    #[test]
+    fn test_follow() {
+	let productions = "
+	    E  -> T E'      
+	    E' -> + T E' | ε
+	    T  -> F T'
+	    T' -> * F T' | ε
+	    F  -> ( E ) | id
+	    ";
+	let cfg = CFG::new(productions);
+
+	let set = cfg.FOLLOW("E");
+	let set2 = HashSet::from([")","$"]);
+	assert_eq!(set, set2);
+
+	let set = cfg.FOLLOW("E'");
+	let set2 = HashSet::from([")","$"]);
+	assert_eq!(set, set2);
+
+	let set = cfg.FOLLOW("T");
+	let set2 = HashSet::from(["+", ")","$"]);
+	assert_eq!(set, set2);
+
+	let set = cfg.FOLLOW("T'");
+	let set2 = HashSet::from(["+", ")","$"]);
+	assert_eq!(set, set2);
+
+	let set = cfg.FOLLOW("F");
+	let set2 = HashSet::from(["*", "+", ")","$"]);
+	assert_eq!(set, set2);	
+	
+
     }
 }
