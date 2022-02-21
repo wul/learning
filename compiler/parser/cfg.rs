@@ -29,14 +29,15 @@ pub struct Production<'a>{
 
 #[derive(Debug, Eq, Clone)]
 pub struct Item<'a>{
-    pub head:  Symbol<'a>,
-    pub body:  Body<'a>,
-    pub dot:   usize,
+    pub head:      Symbol<'a>,
+    pub body:      Body<'a>,
+    pub dot:       usize,
     pub lookahead: Vec<Symbol<'a>>,
 }
 
 
 pub type State<'a> = Vec<Item<'a>>;
+
 
 #[derive(Debug)]
 pub struct CFG<'a> {
@@ -101,6 +102,7 @@ impl<'a> Production<'a> {
 
     pub fn deconstruct(&self) -> Vec<Item> {
 	self.bodies.iter().map(|x| Item {head:self.head, body:x.clone(), dot:0, lookahead:Vec::new()}).collect::<Vec<Item>>()
+
     }
 }
 
@@ -411,8 +413,6 @@ impl<'a> CFG<'a>  {
 	}	
     }
 
-    pub fn build_full_follow_set_deps(&self, nt: Symbol<'a>, xx ) {
-    }
 
     pub fn calculate_follow_set(&mut self) {
 	println!("NT set {:?}", self.NT);	
@@ -439,7 +439,7 @@ impl<'a> CFG<'a>  {
     
     
 	// Calculate all subset of FOLLOW
-	for &nt in self.NT.clone().iter() {	
+	for &nt in self.NT.iter() {	
 	    let mut st = HashSet::new();
 	    st.insert(nt);
 	    
@@ -457,7 +457,7 @@ impl<'a> CFG<'a>  {
 		
 		if swap.len() == 0 {
 		    break;
-	    } else {
+		} else {
 		    swap.iter().for_each(|&x| {st.insert(x);});
 		}
 		
