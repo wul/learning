@@ -482,7 +482,7 @@ impl<'a> CFG<'a>  {
         }
     }
 
-    fn FOLLOW(&self, nt: Symbol<'a>) -> HashSet<Symbol<'a>>{
+    pub fn FOLLOW(&self, nt: Symbol<'a>) -> HashSet<Symbol<'a>>{
 	let mut r = HashSet::new();
 	if let Some(v) = self._FOLLOW.get(nt) {
 	    v.iter().for_each(|&x| {r.insert(x); });
