@@ -8,7 +8,6 @@ struct SLR <'a> {
     _ACTION: HashMap<(i32, Symbol<'a>), (String, i32, Option<Item<'a>>)>,
     _GOTO: HashMap<(i32, Symbol<'a>), i32>,
     _state:Vec<State<'a>>,
-    state_index: i32,
 }
 
 
@@ -34,7 +33,6 @@ impl<'a> SLR <'a>{
 	    _ACTION: HashMap::new(),
 	    _GOTO: HashMap::new(),
 	    _state: Vec::new(),
-	    state_index: 0,
 	}
     }
 
@@ -88,7 +86,7 @@ impl<'a> SLR <'a>{
 	return -1;
     }
 
-    fn get_next_goto_X(&self, state: & State<'a>) -> Vec<Symbol<'a>>{
+    fn get_next_goto_X(&self, state: &State<'a>) -> Vec<Symbol<'a>>{
 	let mut Xs = Vec::<Symbol>::new();
 	for item in state.iter() {
 	    let body = &item.body;
@@ -124,7 +122,7 @@ impl<'a> SLR <'a>{
 	return st;
     }
 
-    fn goto(&self, state: &'a State, X: Symbol) -> State<'a> {
+    fn goto(&self, state: &'a State, X: Symbol) -> State {
 	let mut st = Vec::new();
 
 	for item in state.iter() {
@@ -133,20 +131,95 @@ impl<'a> SLR <'a>{
 	    }
 
 	    if item.body[item.dot] == X {
-		let item = Item{head:item.head,
+		let it = Item{head:item.head,
 				body:item.body.clone(),
-				dot:item.dot+1,
+				dot :item.dot+1,
 				lookahead:vec![],
 		};
-		st.push(item);
+		st.push(it);
 	    }
 	}
 	self.closure(&mut st);
 	return st;
     }
 
+    fn travelsal_state2(& mut self) {
+	let mut cur_state_idx = self._state.len();
+	let mut pool = vec![cur_state_idx as i32]; 
+	let mut processed = HashSet::<i32>::new();
+
+
+
+	loop {
+	    let mut new_states = Vec::<i32>::new();
+	    for &state_idx in pool.iter() {
+		if processed.contains(&state_idx) {
+		    continue;
+		}
+		
+		let state = &self._state[state_idx as usize];
+		let mut discovered_states = Vec::new();
+		let mut actions =  HashMap::<(i32, Symbol<'a>), (String, i32, Option<Item<'a>>)>::new();
+		let mut gotos =  HashMap::<(i32, Symbol<'a>), i32>::new();
+		   
+		for item in state.iter() {
+		    if item.body.len() == item.dot {
+			
+			if item.head == "S'" && item.body.last() == Some(&self.cfg.S) {
+			    actions.insert((state_idx, ENDMARKER), ("Accept".to_string(), -1, None));
+
+			    continue;
+			}
+		    }
+		    
+		    for &t in self.cfg.FOLLOW(item.head).iter() {
+			actions.insert((state_idx, t), ("Reduce".to_string(), -1, Some(item.clone())));
+		    }
+
+		    let next_symbols = self.get_next_goto_X(state);
+		    
+		    for X in next_symbols.into_iter() {
+
+			let new_state = self.goto(state, X);
+			//
+			// WHY HAVE TO USE CLONE
+			//
+			//let new_state = self.gotoT(state.clone(), X);
+			let mut new_state_idx = self.get_state_idx(&new_state);
+
+			if new_state_idx == -1 {
+			    cur_state_idx += 1;
+			    new_state_idx = cur_state_idx as i32;
+			    //self._state.push(new_state);
+			    discovered_states.push(new_state);
+			    new_states.push(new_state_idx);
+			}
+
+			if self.cfg.is_terminal(X) {
+			    actions.insert((state_idx, X), ("Shift".to_string(), new_state_idx, None));
+			} else {
+			    gotos.insert((state_idx, X), new_state_idx);
+			}
+		    }
+
+		    processed.insert(state_idx);
+		}
+
+		//discovered_states.into_iter().for_each(|x| self._state.push(x));
+		    
+	    }
+	    if new_states.is_empty() {
+		break;
+	    } else {
+		new_states.into_iter().for_each(|x| pool.push(x));
+	    }
+	}
+
+    }
+
+    /*
     fn traversal_state(&mut self) {
-	let mut pool = vec![self.state_index];
+	Let mut pool = vec![self.state_index];
 	let mut processed = HashSet::<i32>::new();
 
 	loop {
@@ -174,11 +247,11 @@ impl<'a> SLR <'a>{
 		    let next_symbols = self.get_next_goto_X(state);
 		    
 		    for X in next_symbols.into_iter() {
-			//let new_state = self.goto(state, X);
+			let new_state = self.goto(state, X);
 			//
 			// WHY HAVE TO USE CLONE
 			//
-			let new_state = self.gotoT(state.clone(), X);
+			//let new_state = self.gotoT(state.clone(), X);
 			let mut new_state_idx = self.get_state_idx(&new_state);
 
 			if new_state_idx == -1 {
@@ -209,7 +282,8 @@ impl<'a> SLR <'a>{
 	    }
 	}
     }
-			
+		
+*/	
 							    
     
     /*
