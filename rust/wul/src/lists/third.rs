@@ -25,21 +25,31 @@ impl<T> List<T> {
     //         |10  | next | --> |5   | next | ----> None
     //         ------------      -------------
     pub fn prepend(&self, elem:T) -> List<T> {
+	/*
+	List  {
+	    head: Some(Rc::new(Node{
+		elem,
+		//cloning an Rc<T> increases the reference count only
+		next: self.head.clone(),})),
+	}
+	 */
 	List {
 	    head: Some(Rc::new(Node {
 		elem: elem,
 		//next: self.head.clone(),
-		next: { match &self.head {
-		    Some(rc) => Some(Rc::clone(&(self.head.as_ref().unwrap()))),
-		    None => None,
-		}
-		}
-	    }))
+
+		//Option.clone() same as Option.as_ref().map(|x| x.clone())
+		//next: self.head.as_ref().map(|x| x.clone()),
+		next: self.head.as_ref().map(|x| Rc::clone(x)),		
+	    })),
 	}
 
     }
+
+    //Remove head element and move to the second one
     pub fn tail(&self) -> List<T> {
 	List { head: self.head.as_ref().and_then(|node| node.next.clone()) }
+
     }
 
     pub fn head(&self) -> Option <&T> {

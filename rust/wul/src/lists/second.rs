@@ -1,4 +1,5 @@
 use std::mem;
+use std::ops::Deref;
 /*
 pub enum List {
     Empty,
@@ -34,6 +35,9 @@ impl<T> Drop for List<T> {
 }
 
 pub struct IntoIter<T>(List<T>);
+
+
+
 pub struct Iter<'a, T> {
     next: Option<&'a Node<T>>,
 }
@@ -82,7 +86,13 @@ impl<T> List<T> {
     }
 
     pub fn iter<'a> (&'a self) -> Iter<'a, T> {
+	//all works
+	
 	Iter {next: self.head.as_deref()}
+	//Iter {next: self.head.as_ref().map::<&Node<T>,_>(|x| &x)}
+	//Iter {next: self.head.as_ref().map(|x| x.deref())}
+	//Iter {next: self.head.as_ref().map(|x| x.as_ref())}	
+	//Iter {next: self.head.as_ref().map(|x| &**x)}	
     }
 
 }
@@ -104,6 +114,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
 	})
     }
 }
+
 
 fn main() {
 
@@ -160,4 +171,17 @@ mod tests {
 
 
     }
+
+    #[test]
+    fn iter() {
+	let mut list = List::new();
+	list.push(1); list.push(2); list.push(3);
+	let mut iter = list.iter();
+	assert_eq!(iter.next(), Some(&3));
+	assert_eq!(iter.next(), Some(&2));
+	assert_eq!(iter.next(), Some(&1));
+	assert_eq!(iter.next(), None);
+
+
+    }    
 }
