@@ -8,10 +8,10 @@ use stack::Stack;
 use std::fmt::{Display, Write};
 
 struct SLR <'a> {
-    cfg: &'a CFG<'a>,
-    _ACTION: HashMap<(i32, Symbol<'a>), (String, i32, Option<Item<'a>>)>,
-    _GOTO: HashMap<(i32, Symbol<'a>), i32>,
-    _state:Vec<State<'a>>,
+    cfg: &'a CFG,
+    _ACTION: HashMap<(i32, Symbol), (String, i32, Option<Item>)>,
+    _GOTO: HashMap<(i32, Symbol), i32>,
+    _state:Vec<State>,
     state_index: i32,
 }
 
@@ -58,7 +58,7 @@ fn repr_left(items: &Vec<Symbol>) -> String{
 }
 
 impl<'a> SLR <'a>{
-    fn new(cfg: &'a CFG<'a>) -> Self{
+    fn new(cfg: &'a CFG) -> Self{
 	SLR {
 	    cfg, 
 	    _ACTION: HashMap::new(),
@@ -69,7 +69,7 @@ impl<'a> SLR <'a>{
     }
 
 
-    fn closure(&self, items: &mut Vec<Item<'a>>) {
+    fn closure(&self, items: &mut Vec<Item>) {
 	loop {
 	    let mut new_items = Vec::<Item>::new();
 	    for item in items.iter() {
@@ -77,8 +77,8 @@ impl<'a> SLR <'a>{
 		    continue;
 		}
 
-		let symbol = item.body[item.dot];
-		if self.cfg.is_non_terminal(symbol) {
+		let symbol = &item.body[item.dot];
+		if self.cfg.is_non_terminal(&symbol) {
 		    let production = self.cfg.get_production(symbol);
 		    let item_lst = production.deconstruct();
 
@@ -98,7 +98,7 @@ impl<'a> SLR <'a>{
 	}
     }
 
-    fn closure2(&self, nt: Symbol) -> State<'a>{
+    fn closure2(&self, nt: &Symbol) -> State{
 	let production = self.cfg.get_production(nt);
 	let mut state = production.deconstruct();
 
@@ -122,21 +122,21 @@ impl<'a> SLR <'a>{
 	return -1;
     }
 
-    fn get_next_goto_X(&self, state: &State<'a>) -> Vec<Symbol<'a>>{
+    fn get_next_goto_X(&self, state: &State) -> Vec<Symbol>{
 	let mut Xs = Vec::<Symbol>::new();
 	for item in state.iter() {
 	    let body = &item.body;
 	    if item.dot < body.len() && body[item.dot] != EPSILON {
-		let t = body[item.dot];
-		if !Xs.contains(&t) {
-		    Xs.push(t);
+		let t = &body[item.dot];
+		if !Xs.contains(t) {
+		    Xs.push(t.clone());
 		}
 	    }
 	}
 	return Xs
     }
 
-    fn discover(&self, state_idx: i32, X: Symbol) -> State<'a> {
+    fn discover(&self, state_idx: i32, X: &Symbol) -> State {
 	let state = &self._state[state_idx as usize];
 	let mut st = Vec::new();
 
@@ -145,8 +145,8 @@ impl<'a> SLR <'a>{
 		continue;
 	    }
 
-	    if item.body[item.dot] == X {
-		let it = Item{head:item.head,
+	    if item.body[item.dot] == *X {
+		let it = Item{head:item.head.clone(),
 				body:item.body.clone(),
 				dot :item.dot+1,
 				lookahead:vec![],
@@ -162,13 +162,16 @@ impl<'a> SLR <'a>{
 	&self._state[state_idx as usize]
     }
     fn build_items_sets(&mut self) {
-	let mut state = vec![Item {head: "S'", body: vec![self.cfg.S], dot:0, lookahead:vec![]}];
+	let mut state = vec![Item {head: "S'".to_string(),
+				   body: vec![self.cfg.S.clone()],
+				   dot:0,
+				   lookahead:vec![]}];
 	self.closure(&mut state);
 	self._state.push(state);
 	self.state_index = 0;
 	self.traversal_state();
     }
-
+    /*
     fn traversal_state(&mut self) {
 	let mut pool = vec![self.state_index];
 	let mut processed = HashSet::<i32>::new();
@@ -197,9 +200,10 @@ impl<'a> SLR <'a>{
 			continue;
 		    }
 
-		    
+
 		    for &X in next_symbols.iter() {
 			let new_state = self.discover(state_idx, X);
+			
 			let mut new_state_idx = self.get_state_idx(&new_state);
 
 			if new_state_idx == -1 {
@@ -207,7 +211,9 @@ impl<'a> SLR <'a>{
 			    new_state_idx = self.state_index;
 			    discovered_states.push(new_state);
 			    new_states.push(new_state_idx);
-			    self._state.push(new_state);
+
+			    self.try_add_new_state(new_state);
+			    //self._state.push(new_state);
 			}
 
 			if self.cfg.is_terminal(X) {
@@ -232,15 +238,85 @@ impl<'a> SLR <'a>{
 	    }
 	}
     }
+     */
+    
+    fn traversal_state(&mut self) {
+	let mut pool = vec![self.state_index];
+	let mut processed = HashSet::<i32>::new();
+	loop {
+	    let mut has_new_state = false;
+	    
+	    let mut new_states = Vec::<i32>::new();
+	    let mut discovered_states = HashMap::<Symbol, (State, i32)>::new();
+	    
+	    for &state_idx in pool.iter() {
+		if processed.contains(&state_idx) {
+		    continue;
+		}
+		let state = self.get_state_items(state_idx);
+		let next_symbols = self.get_next_goto_X(state);
+
+
+		for X in next_symbols.iter() {
+		    let new_state = self.discover(state_idx, X);
+		    let state_idx = self.get_state_idx(&new_state);
+		    discovered_states.insert(X.clone(), (new_state, state_idx));
+		}
+
+	    }
+
+	    let mut cur_idx = self.state_index;
+	    
+	    for (symbol, st) in discovered_states.into_iter() {
+		let (state, mut state_idx) = st;
+
+		if state_idx == -1 {
+		    cur_idx += 1;
+		    state_idx = cur_idx;
+		    has_new_state = true;
+		} 
+
+		for item in state.iter() {
+		    if item.body.len() == item.dot {
+			
+			if item.head == "S'" && item.body.last() == Some(&self.cfg.S) {
+			    self._ACTION.insert((state_idx, ENDMARKER.to_string()), ("Accept".to_string(), -1, None));
+			} else {
+			    for t in self.cfg.FOLLOW(&item.head).iter() {
+				self._ACTION.insert((state_idx, t.clone()), ("Reduce".to_string(), -1, Some(item.clone())));
+			    }
+			}
+		    }
+		}
+		/*
+		
+		if self.cfg.is_terminal(symbol) {
+		    self._ACTION.insert((state_idx, symbol), ("Shift".to_string(), state_idx, None));
+		} else {
+		    self._GOTO.insert((state_idx, symbol), state_idx);
+		}
+		*/
+		self._state.push(state);
+		processed.insert(state_idx);
+
+	    }
+	    
+	    self.state_index = cur_idx;
+	    if !has_new_state {
+		break;
+	    }
+
+	}
+    }
 		
 
 							    
-    fn GOTO(&self, state_idx: i32, X: Symbol) -> Option<i32> {
-	self._GOTO.get(&(state_idx, X)).and_then(|x| Some(*x))
+    fn GOTO(&self, state_idx: i32, X: &Symbol) -> Option<i32> {
+	self._GOTO.get(&(state_idx, X.clone())).and_then(|x| Some(*x))
     }
 
-    fn ACTION(&self, state_idx: i32, X: Symbol<'a>) -> Option<&'a (String, i32, Option<Item>)> {
-	self._ACTION.get(&(state_idx, X))
+    fn ACTION(&self, state_idx: i32, X: &Symbol) -> Option<&(String, i32, Option<Item>)> {
+	self._ACTION.get(&(state_idx, X.clone()))
 	
     }
     
@@ -264,21 +340,21 @@ impl<'a> SLR <'a>{
     fn parse(&self, s: &str) {
 	println!("\nParse string:{}", s);
 
-	let mut ss = s.split_whitespace().collect::<Vec<&str>>();
-	ss.push(ENDMARKER);
+	let mut ss: Vec<String> = s.split_whitespace().collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
+	ss.push(ENDMARKER.to_string());
 	
 	let mut stack = Stack::new();
 	let mut stack_symbol = Stack::new();
 
 	let mut cache = vec![0];
 	stack.push(0); //push state 0
-	stack_symbol.push(ENDMARKER);
+	stack_symbol.push(ENDMARKER.to_string());
 
 	let mut idx = 0;
-	let mut t = ss[idx];
+	let mut t = &ss[idx];
 	loop {
 	    if let Some(&state) = stack.peek() {
-		let res = self.ACTION(state, t);
+		let res = self.ACTION(state, &t);
 		self.print_state(&stack, &stack_symbol, "");
 		match res {
 		    Some(act) => {
@@ -296,7 +372,7 @@ impl<'a> SLR <'a>{
 				    length -= 1;
 				}
 
-				stack_symbol.push(head);
+				stack_symbol.push(head.clone());
 				if let Some(&state) = stack.peek() {
 				    if let Some(next) = self.GOTO(state, head) {
 					stack.push(next);
@@ -312,13 +388,13 @@ impl<'a> SLR <'a>{
 				panic!("Reduce must have specified item given");
 			    }
 			} else if act.0 == "Shift" {
-			    stack_symbol.push(t);
+			    stack_symbol.push(t.clone());
 			    stack.push(act.1);
 			    idx += 1;
 			    if idx >= ss.len() {
 				break;
 			    }
-			    t = ss[idx];
+			    t = &ss[idx];
 			    
 			}
 		    },
@@ -362,14 +438,14 @@ mod tests {
                  F  -> ( E ) | id
                 ";
 
-	let state = vec![Item { head: "E", body: vec!["T", "E'"], dot: 0, lookahead: vec![] },
-			 Item { head: "T", body: vec!["F", "T'"], dot: 0, lookahead: vec![] },
-			 Item { head: "F", body: vec!["(", "E", ")"], dot: 0, lookahead: vec![] },
-			 Item { head: "F", body: vec!["id"], dot: 0, lookahead: vec![] }];
+	let state = vec![Item { head: "E".to_string(), body: vec!["T".to_string(), "E'".to_string()], dot: 0, lookahead: vec![] },
+			 Item { head: "T".to_string(), body: vec!["F".to_string(), "T'".to_string()], dot: 0, lookahead: vec![] },
+			 Item { head: "F".to_string(), body: vec!["(".to_string(), "E".to_string(), ")".to_string()], dot: 0, lookahead: vec![] },
+			 Item { head: "F".to_string(), body: vec!["id".to_string()], dot: 0, lookahead: vec![] }];
 	
 	let cfg = CFG::new(s);
 	let mut slr = SLR::new(&cfg);
-	let items = slr.closure2("E");
+	let items = slr.closure2(&"E".to_string());
 	println!("{:?}", items);
 	
 	assert!(are_states_same(&items, &state));
@@ -386,20 +462,20 @@ mod tests {
                  F  -> ( E ) | id
                 ";
 
-	let state = vec![Item { head: "E", body: vec!["T", "E'"], dot: 0, lookahead: vec![] },
-			 Item { head: "T", body: vec!["F", "T'"], dot: 0, lookahead: vec![] },
-			 Item { head: "F", body: vec!["(", "E", ")"], dot: 0, lookahead: vec![] },
-			 Item { head: "F", body: vec!["id"], dot: 0, lookahead: vec![] }];
+	let state = vec![Item { head: "E".to_string(), body: vec!["T".to_string(), "E'".to_string()], dot: 0, lookahead: vec![] },
+			 Item { head: "T".to_string(), body: vec!["F".to_string(), "T'".to_string()], dot: 0, lookahead: vec![] },
+			 Item { head: "F".to_string(), body: vec!["(".to_string(), "E".to_string(), ")".to_string()], dot: 0, lookahead: vec![] },
+			 Item { head: "F".to_string(), body: vec!["id".to_string()], dot: 0, lookahead: vec![] }];
 	
 	let cfg = CFG::new(s);
 	let mut slr = SLR::new(&cfg);
-	let mut I0 = cfg.get_production("E").deconstruct();
-	I0.insert(0, Item{head:"S'", body: vec![cfg.S], dot:0, lookahead: vec![]});
+	let mut I0 = cfg.get_production(&"E".to_string()).deconstruct();
+	I0.insert(0, Item{head:"S'".to_string(), body: vec![cfg.S.clone()], dot:0, lookahead: vec![]});
 	slr.closure(&mut I0);
 
 	let next_symbols = slr.get_next_goto_X(&I0);
 	println!("Xs:{:?}", next_symbols);
-	assert_eq!(&next_symbols, &vec!["E", "T", "F", "(", "id"]);
+	assert_eq!(&next_symbols, &vec!["E".to_string(), "T".to_string(), "F".to_string(), "(".to_string(), "id".to_string()]);
 
     }
 
@@ -422,8 +498,8 @@ mod tests {
 	println!("I0:{:?}", &state0);	
 	println!("I1:{:?}", &state1);
 	assert!(are_states_same(
-	    &vec![Item { head: "E", body: vec!["T", "E'"], dot: 0, lookahead: vec![] },
-		  Item { head: "T", body: vec!["F", "T'"], dot: 0, lookahead: vec![] }],
+	    &vec![Item { head: "E".to_string(), body: vec!["T".to_string(), "E'".to_string()], dot: 0, lookahead: vec![] },
+		  Item { head: "T".to_string(), body: vec!["F".to_string(), "T'".to_string()], dot: 0, lookahead: vec![] }],
 	    &state1));
     }
 
