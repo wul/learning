@@ -1,46 +1,39 @@
+
 pub struct Stack<T> {
-    maxsize: usize,
     items: Vec<T>,
 }
 
 impl<T> Stack<T> {
-
-    pub fn with_capacity(maxsize: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            maxsize,
-            items: Vec::with_capacity(maxsize),
+            items: Vec::new(),
         }
     }
     pub fn pop(&mut self) -> Option<T> {
         self.items.pop()
     }
-    pub fn push(&mut self, item: T) -> bool {
-        if self.items.len() == self.maxsize {
-            return false;
-        }
+    pub fn push(&mut self, item: T){
         self.items.push(item);
-        return true;
     }
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.items.len()
     }
     pub fn peek(&self) -> Option<&T> {
         self.items.last()
     }
+
+    pub fn items(&self) -> &Vec<T> {
+	&self.items
+    }
 }
+
 
 #[cfg(test)]
 
 mod tests {
     #[test]
-    fn test_new_with_capacity() {
-        let stack = super::Stack::<u32>::with_capacity(10);
-        assert_eq!(10, stack.items.capacity());
-    }
-
-    #[test]
     fn test_pop(){
-        let mut stack = super::Stack::<u32>::with_capacity(1);
+        let mut stack = super::Stack::<u32>::new();
         stack.push(1u32);
         assert_eq!(Some(1u32), stack.pop());
         assert_eq!(None, stack.pop());
@@ -48,25 +41,17 @@ mod tests {
 
     #[test]
     fn test_push() {
-        let mut stack = super::Stack::<u32>::with_capacity(1);
+        let mut stack = super::Stack::<u32>::new();
         stack.push(32u32);
         assert_eq!(Some(&32u32), stack.peek());
-        assert_eq!(1, stack.size());
-    }
-
-    #[test]
-    fn test_push_maxsize() {
-        let mut stack = super::Stack::<u32>::with_capacity(1);
-        assert_eq!(true, stack.push(1u32));
-        assert_eq!(Some(&1u32), stack.peek());
-        assert_eq!(false, stack.push(2u32));
+        assert_eq!(1, stack.len());
     }
 
     #[test]
     fn test_size() {
-        let mut stack = super::Stack::<u32>::with_capacity(1);
-        assert_eq!(0, stack.size());
+        let mut stack = super::Stack::<u32>::new();
+        assert_eq!(0, stack.len());
         stack.push(1u32);
-        assert_eq!(1, stack.size());
+        assert_eq!(1, stack.len());
     }
 }

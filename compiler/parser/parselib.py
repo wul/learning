@@ -505,8 +505,8 @@ class LR0():
             if item.dot == len(item.body):
                 continue
             if item.body[item.dot] == X:
-                item = Item(head=item.head, body=item.body, dot=item.dot+1)
-                st.append(item)
+                let i = Item(head=item.head, body=item.body, dot=item.dot+1)
+                st.append(i)
 
         return self.closure(st)
     

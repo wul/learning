@@ -142,7 +142,7 @@ impl<'a> Hash for Item<'a> {
 
 
 impl<'a> CFG<'a>  {
-    fn new(s: &'a str) -> Self {
+    pub fn new(s: &'a str) -> Self {
 	let mut cfg = Self {
 	    T: HashSet::new(),
 	    NT: HashSet::new(),
