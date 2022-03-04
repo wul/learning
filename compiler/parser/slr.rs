@@ -12,32 +12,28 @@ struct SLR <'a> {
     _ACTION: HashMap<(i32, Symbol<'a>), (String, i32, Option<Item<'a>>)>,
     _GOTO: HashMap<(i32, Symbol<'a>), i32>,
     _state:Vec<State<'a>>,
-    state_index: i32,
 }
 
 
 fn are_states_same(me: &State, other: &State) -> bool {
-    if me.len() != other.len() {
-	return false;
+    let mut lst1: Vec<String>  = other.iter().map(|x| x.to_string()).collect::<Vec<String>>();
+    lst1.sort();
+    me.iter().for_each(|x| {lst1.push(x.to_string());});
+    let mut lst2: Vec<String>  = other.iter().map(|x| x.to_string()).collect::<Vec<String>>();
+    lst2.sort();
+
+
+    let mut ret;
+    if lst1 == lst2 {
+	ret= true;
+    } else {
+	ret= false;
     }
+    if me.len() == 1 {
+	println!("\n\n\n\n\nCompare state\n{:?}\nwith\n{:?}\n, RET={}", me, other, ret);
+    }
+    return ret;
     
-    let mut idx = 0;
-    let len = me.len();
-    for idx in 0..len {
-	let mut found = false;
-	for idx2 in 0..len {
-	    if me[idx] != other[idx2] {
-		found = true;
-		break
-	    }
-	}
-	if !found {
-	    return false;
-	}
-    }
-
-    return true;
-
 }
 
 fn repr_right<T>(items: &Vec<T>) -> String
@@ -57,19 +53,27 @@ fn repr_left(items: &Vec<Symbol>) -> String{
     format!("{}", cloned.join(" "))
 }
 
+
+fn state_in_state_set(state:&State, set: &Vec<State>) -> bool {
+    for st in set.iter() {
+	if are_states_same(st, state) {
+	    return true;
+	}
+    }
+    return false;
+}
 impl<'a> SLR <'a>{
-    fn new(cfg: &'a CFG<'a>) -> Self{
+    fn new(cfg: &'a CFG) -> Self{
 	SLR {
 	    cfg, 
 	    _ACTION: HashMap::new(),
 	    _GOTO: HashMap::new(),
 	    _state: Vec::new(),
-	    state_index:0,
 	}
     }
 
 
-    fn closure(&self, items: &mut Vec<Item<'a>>) {
+    fn closure(&self, mut items: Vec<Item<'a>>) -> State<'a>{
 	loop {
 	    let mut new_items = Vec::<Item>::new();
 	    for item in items.iter() {
@@ -96,14 +100,15 @@ impl<'a> SLR <'a>{
 		new_items.into_iter().for_each(|x| {items.push(x);});
 	    }
 	}
+	return items;
     }
 
-    fn closure2(&self, nt: Symbol) -> State<'a>{
+    fn closure2(&self, nt: Symbol<'a>) -> State<'a>{
 	let production = self.cfg.get_production(nt);
 	let mut state = production.deconstruct();
 
-	self.closure(&mut state);
-	return state;
+	return self.closure(state);
+	//return state;
     }
     fn init(&mut self) {
 	self.build_items_sets();
@@ -114,7 +119,7 @@ impl<'a> SLR <'a>{
 	let mut idx = -1;
 	for st in self._state.iter() {
 	    idx += 1;
-	    if st == state {
+	    if are_states_same(st, state) {
 		return idx as i32;
 	    }
 	}
@@ -136,7 +141,7 @@ impl<'a> SLR <'a>{
 	return Xs
     }
 
-    fn discover(&self, state_idx: i32, X: Symbol) -> State<'a> {
+    fn discover(&self, state_idx: i32, X: Symbol<'a>) -> State<'a> {
 	let state = &self._state[state_idx as usize];
 	let mut st = Vec::new();
 
@@ -154,39 +159,47 @@ impl<'a> SLR <'a>{
 		st.push(it);
 	    }
 	}
-	self.closure(&mut st);
-	return st;
+	return self.closure(st);
+	//return st;
     }
 
+    
+    fn contains_state(&self, state: &State) -> bool {
+	for st in self._state.iter() {
+	    if are_states_same(st, state) {
+		return true
+	    }
+	}
+	return false;
+    }
+    
     fn get_state_items(&self, state_idx: i32) -> &State{
 	&self._state[state_idx as usize]
     }
     fn build_items_sets(&mut self) {
 	let mut state = vec![Item {head: "S'", body: vec![self.cfg.S], dot:0, lookahead:vec![]}];
-	self.closure(&mut state);
+	let state = self.closure(state);
 	self._state.push(state);
-	self.state_index = 0;
 	self.traversal_state();
     }
 
     fn traversal_state(&mut self) {
-	let mut pool = vec![self.state_index];
-	let mut processed = HashSet::<i32>::new();
-
+	let mut processed = 0;
 	loop {
-	    let mut new_states = Vec::<i32>::new();
-	    for &state_idx in pool.iter() {
-		if processed.contains(&state_idx) {
-		    continue;
-		}
+	    let total = self._state.len() as i32;
+	    
+	    let mut found_new = false;
+
+	    for idx in processed .. total {
+		println!("processed {}, total {}", processed,total);
+		let state_idx = idx;
+
 		
-		let mut discovered_states = Vec::new();
+		let mut discovered_states = HashMap::<Symbol, State>::new();
+
 		let state = &self._state[state_idx as usize];
-		let next_symbols = self.get_next_goto_X(state);
-		
 		for item in state.iter() {
 		    if item.body.len() == item.dot {
-			
 			if item.head == "S'" && item.body.last() == Some(&self.cfg.S) {
 			    self._ACTION.insert((state_idx, ENDMARKER), ("Accept".to_string(), -1, None));
 			} else {
@@ -194,42 +207,44 @@ impl<'a> SLR <'a>{
 				self._ACTION.insert((state_idx, t), ("Reduce".to_string(), -1, Some(item.clone())));
 			    }
 			}
-			continue;
 		    }
-
-		    
-		    for &X in next_symbols.iter() {
-			let new_state = self.discover(state_idx, X);
-			let mut new_state_idx = self.get_state_idx(&new_state);
-
-			if new_state_idx == -1 {
-			    self.state_index += 1;
-			    new_state_idx = self.state_index;
-			    discovered_states.push(new_state);
-			    new_states.push(new_state_idx);
-			    self._state.push(new_state);
-			}
-
-			if self.cfg.is_terminal(X) {
-			    self._ACTION.insert((state_idx, X), ("Shift".to_string(), new_state_idx, None));
-			} else {
-			    self._GOTO.insert((state_idx, X), new_state_idx);
-			}
-		    }
-
-		    processed.insert(state_idx);
 		}
-
-		discovered_states.into_iter().for_each(|x| self._state.push(x));
 		
-	    }
+		let next_symbols = self.get_next_goto_X(state);
+		
+		for &X in next_symbols.iter() {
+		    let new_state = self.discover(state_idx, X);
+		    println!("Got new state {:?}", new_state);
+		    if !state_in_state_set(&new_state, &discovered_states.values().cloned().collect()) {
+			discovered_states.insert(X, new_state);
+		    }
+		    found_new = true;
+		}
+		println!("got total {} new states", discovered_states.len());
 
-	    
-	    if new_states.is_empty() {
+		//for (X, state) in discovered_states.into_iter() {
+		let mut cur_idx = idx;
+		for &X in next_symbols.iter() {
+		    let state = discovered_states.remove(X).unwrap();
+		    if !self.contains_state(&state) {
+			println!("state not in _state list:\n{:?}", &state);
+			cur_idx += 1;
+		    } 
+		    self._state.push(state);
+		    
+		    if self.cfg.is_terminal(X) {
+			self._ACTION.insert((state_idx, X), ("Shift".to_string(), cur_idx, None));
+		    } else {
+			self._GOTO.insert((state_idx, X), cur_idx);
+		    }
+		}
+		processed += 1;
+	    } //state loop in pool
+
+	    if processed == self._state.len() as i32 {
 		break;
-	    } else {
-		new_states.into_iter().for_each(|x| pool.push(x));
 	    }
+	    self.print();
 	}
     }
 		
@@ -252,7 +267,7 @@ impl<'a> SLR <'a>{
 	for (state_idx, items) in self._state.iter().enumerate() {
 	    println!("{}", state_idx);
 	    for item in items {
-		println!("\t{:?}", item);
+		println!("\t{:?}", item.to_string());
 	    }
 
 	}

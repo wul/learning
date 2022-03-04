@@ -35,6 +35,13 @@ pub struct Item<'a>{
     pub lookahead: Vec<Symbol<'a>>,
 }
 
+impl<'a> ToString for Item<'a> {
+    fn to_string(&self) -> String {
+	let mut body = self.body.clone();
+	body.insert(self.dot, ".");
+	format!("{} -> {}, {} {}", self.head, body.join(" "), self.dot, self.lookahead.join("/"))
+    }
+}
 
 pub type State<'a> = Vec<Item<'a>>;
 
