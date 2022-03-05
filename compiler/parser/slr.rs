@@ -16,29 +16,6 @@ struct SLR <'a> {
 }
 
 
-fn are_states_same(me: &State, other: &State) -> bool {
-    if me.len() != other.len() {
-	return false;
-    }
-    
-    let mut idx = 0;
-    let len = me.len();
-    for idx in 0..len {
-	let mut found = false;
-	for idx2 in 0..len {
-	    if me[idx] != other[idx2] {
-		found = true;
-		break
-	    }
-	}
-	if !found {
-	    return false;
-	}
-    }
-
-    return true;
-
-}
 
 fn repr_right<T>(items: &Vec<T>) -> String
 where T: std::fmt::Display,
@@ -69,7 +46,7 @@ impl<'a> SLR <'a>{
     }
 
 
-    fn closure(&self, items: &mut Vec<Item>) {
+    fn closure(&self, items: &mut State) {
 	loop {
 	    let mut new_items = Vec::<Item>::new();
 	    for item in items.iter() {
@@ -100,7 +77,7 @@ impl<'a> SLR <'a>{
 
     fn closure2(&self, nt: &Symbol) -> State{
 	let production = self.cfg.get_production(nt);
-	let mut state = production.deconstruct();
+	let mut state = State::from(production.deconstruct());
 
 	self.closure(&mut state);
 	return state;
@@ -138,7 +115,7 @@ impl<'a> SLR <'a>{
 
     fn discover(&self, state_idx: i32, X: &Symbol) -> State {
 	let state = &self._state[state_idx as usize];
-	let mut st = Vec::new();
+	let mut st = State::new();
 
 	for item in state.iter() {
 	    if item.dot == item.body.len() {
@@ -149,7 +126,7 @@ impl<'a> SLR <'a>{
 		let it = Item{head:item.head.clone(),
 				body:item.body.clone(),
 				dot :item.dot+1,
-				lookahead:vec![],
+				lookahead:HashSet::new(),
 		};
 		st.push(it);
 	    }
@@ -158,14 +135,14 @@ impl<'a> SLR <'a>{
 	return st;
     }
 
-    fn get_state_items(&self, state_idx: i32) -> &State{
+    fn get_state(&self, state_idx: i32) -> &State{
 	&self._state[state_idx as usize]
     }
     fn build_items_sets(&mut self) {
-	let mut state = vec![Item {head: "S'".to_string(),
+	let mut state = State::from(vec![Item {head: "S'".to_string(),
 				   body: vec![self.cfg.S.clone()],
 				   dot:0,
-				   lookahead:vec![]}];
+				   lookahead:HashSet::new()}]);
 	self.closure(&mut state);
 	self._state.push(state);
 	self.state_index = 0;
@@ -239,74 +216,61 @@ impl<'a> SLR <'a>{
 	}
     }
      */
-    
+
+
     fn traversal_state(&mut self) {
-	let mut pool = vec![self.state_index];
-	let mut processed = HashSet::<i32>::new();
-	loop {
-	    let mut has_new_state = false;
+	let mut processed = 0;
+	while processed < self._state.len() {
+
+	    println!("--------LOOP BEGIN--processed:{}, size:{}------", processed, self._state.len());
+
+	    let total = self._state.len();
+	    let mut top:i32 = (total as i32) - 1;
 	    
-	    let mut new_states = Vec::<i32>::new();
-	    let mut discovered_states = HashMap::<Symbol, (State, i32)>::new();
-	    
-	    for &state_idx in pool.iter() {
-		if processed.contains(&state_idx) {
-		    continue;
-		}
-		let state = self.get_state_items(state_idx);
-		let next_symbols = self.get_next_goto_X(state);
+	    for index in processed .. total {
+		println!("Process {}", index);
+		let state_idx = index as i32;
 
-
-		for X in next_symbols.iter() {
-		    let new_state = self.discover(state_idx, X);
-		    let state_idx = self.get_state_idx(&new_state);
-		    discovered_states.insert(X.clone(), (new_state, state_idx));
-		}
-
-	    }
-
-	    let mut cur_idx = self.state_index;
-	    
-	    for (symbol, st) in discovered_states.into_iter() {
-		let (state, mut state_idx) = st;
-
-		if state_idx == -1 {
-		    cur_idx += 1;
-		    state_idx = cur_idx;
-		    has_new_state = true;
-		} 
-
+		//why not work by using function
+		//let state = self.get_state(state_idx as i32);
+		let state = &self._state[index];
+		
 		for item in state.iter() {
 		    if item.body.len() == item.dot {
-			
 			if item.head == "S'" && item.body.last() == Some(&self.cfg.S) {
-			    self._ACTION.insert((state_idx, ENDMARKER.to_string()), ("Accept".to_string(), -1, None));
+			    self._ACTION.insert((state_idx, ENDMARKER.to_string()),
+						("Accept".to_string(), -1, None));
 			} else {
 			    for t in self.cfg.FOLLOW(&item.head).iter() {
-				self._ACTION.insert((state_idx, t.clone()), ("Reduce".to_string(), -1, Some(item.clone())));
+				self._ACTION.insert((state_idx, t.clone()),
+						    ("Reduce".to_string(), -1, Some(item.clone())));
 			    }
 			}
 		    }
-		}
-		/*
-		
-		if self.cfg.is_terminal(symbol) {
-		    self._ACTION.insert((state_idx, symbol), ("Shift".to_string(), state_idx, None));
-		} else {
-		    self._GOTO.insert((state_idx, symbol), state_idx);
-		}
-		*/
-		self._state.push(state);
-		processed.insert(state_idx);
+		}		
 
-	    }
-	    
-	    self.state_index = cur_idx;
-	    if !has_new_state {
-		break;
-	    }
+		let next_symbols = self.get_next_goto_X(state);
+
+		for X in next_symbols.iter() {
+		    let new_state = self.discover(state_idx, X);
+		    let mut idx = self.get_state_idx(&new_state);
+		    if idx == -1 {
+			println!("new state\n{:?}", new_state);
+			self._state.push(new_state);
+			top += 1;
+		    }
+		    if self.cfg.is_terminal(X) {
+			self._ACTION.insert((state_idx, X.clone()), ("Shift".to_string(), top, None));}
+		    else {
+			self._GOTO.insert((state_idx, X.clone()), top);
+		    }
+
+		}
+	    } //done of _state loop
+	    processed = total;
 
 	}
+
     }
 		
 
@@ -325,9 +289,9 @@ impl<'a> SLR <'a>{
     }
     fn print(&self) {
 	println!("Print state table");
-	for (state_idx, items) in self._state.iter().enumerate() {
+	for (state_idx, state) in self._state.iter().enumerate() {
 	    println!("{}", state_idx);
-	    for item in items {
+	    for item in state.iter() {
 		println!("\t{:?}", item);
 	    }
 
@@ -448,7 +412,7 @@ mod tests {
 	let items = slr.closure2(&"E".to_string());
 	println!("{:?}", items);
 	
-	assert!(are_states_same(&items, &state));
+	assert_eq!(items, state);
 
     }
 
@@ -493,14 +457,13 @@ mod tests {
 	slr.init();
 
 	
-	let state0 = slr.get_state_items(0);
-	let state1 = slr.get_state_items(1);	
+	let state0 = slr.get_state(0);
+	let state1 = slr.get_state(1);	
 	println!("I0:{:?}", &state0);	
 	println!("I1:{:?}", &state1);
-	assert!(are_states_same(
-	    &vec![Item { head: "E".to_string(), body: vec!["T".to_string(), "E'".to_string()], dot: 0, lookahead: vec![] },
-		  Item { head: "T".to_string(), body: vec!["F".to_string(), "T'".to_string()], dot: 0, lookahead: vec![] }],
-	    &state1));
+	assert_eq!(State::from(vec![Item { head: "E".to_string(), body: vec!["T".to_string(), "E'".to_string()], dot: 0, lookahead: vec![] },
+				    Item { head: "T".to_string(), body: vec!["F".to_string(), "T'".to_string()], dot: 0, lookahead: vec![] }]),
+		   state1);
     }
 
 }

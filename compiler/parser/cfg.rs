@@ -1,7 +1,8 @@
 use std::hash::{Hash, Hasher};
 use std::collections::{HashSet, HashMap};
 use std::mem;
-
+use std::slice::Iter;
+use std::vec::IntoIter;
 
 
 pub type Symbol = String;
@@ -27,16 +28,76 @@ pub struct Production{
     bodies: Vec<Body>,
 }
 
+//PartialEq is defined by us
 #[derive(Debug, Eq, Clone)]
 pub struct Item{
     pub head:      Symbol,
     pub body:      Body,
     pub dot:       usize,
-    pub lookahead: Vec<Symbol>,
+    pub lookahead: HashSet<Symbol>,
 }
 
 
-pub type State = Vec<Item>;
+//pub type State = Vec<Item>;
+//pub type State<'a> = Vec<Item<'a>>;
+#[derive(Debug, Clone)]
+pub struct  State{
+    items: Vec<Item>,
+}
+
+impl State {
+    pub fn new() -> Self {
+	State {
+	    items: Vec::<Item>::new(),
+	}
+    }
+    pub fn push(&mut self, item: Item) {
+	self.items.push(item);
+    }
+    pub fn contains(&self, item: &Item) -> bool {
+	self.items.contains(item)
+    }
+	
+    pub fn count_items(&self) -> i32 {
+	self.items.len() as i32
+    }
+
+    pub fn iter(&self) -> Iter<Item> {
+	self.items.iter()
+	
+    }
+
+    /*
+    pub fn into_iter(&self) -> IntoIter<Item> {
+	self.items.into_iter()
+    }
+    */
+}
+
+impl From<Vec<Item>> for State {
+    fn from(items: Vec<Item>) -> Self{
+	Self{items}
+    }
+}
+
+impl PartialEq for State {
+    fn eq(&self, other: &State) -> bool {
+	if self.items.len() != other.items.len() {
+	    return false;
+	}
+
+	for item in self.items.iter() {
+	    if !other.items.contains(item) {
+		return false;
+	    }
+	}
+
+	true
+    }
+}
+
+
+
 
 
 #[derive(Debug)]
@@ -104,7 +165,7 @@ impl Production {
 	self.bodies.iter().map(|x| Item {head:self.head.clone(),
 					 body:x.clone(),
 					 dot:0,
-					 lookahead:Vec::new()}).collect::<Vec<Item>>()
+					 lookahead:HashSet::new()}).collect::<Vec<Item>>()
 
     }
 }
