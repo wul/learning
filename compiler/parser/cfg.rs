@@ -1,18 +1,18 @@
 use std::hash::{Hash, Hasher};
 use std::collections::{HashSet, HashMap};
 use std::mem;
+use std::slice::Iter;
+use std::vec::IntoIter;
 
+pub type Symbol<'text> = &'text str;
 
-
-pub type Symbol<'a> = &'a str;
-
-type Body<'a> = Vec<Symbol<'a>>;
+type Body<'text> = Vec<Symbol<'text>>;
 
     
-struct Token<'a, T> {
+struct Token<'text, T> {
     token_type: u32,
     attr_value: Option<T>,
-    symbol:     Symbol<'a>,
+    symbol:     Symbol<'text>,
 }
 
 
@@ -21,21 +21,21 @@ pub const EPSILON:&str   = "ε";
 pub const ENDMARKER:&str = "$";
 
 #[derive(Debug, Clone)]
-pub struct Production<'a>{
+pub struct Production<'text>{
     rank: usize,
-    head: Symbol<'a>, 
-    bodies: Vec<Body<'a>>,
+    head: Symbol<'text>, 
+    bodies: Vec<Body<'text>>,
 }
 
 #[derive(Debug, Eq, Clone)]
-pub struct Item<'a>{
-    pub head:      Symbol<'a>,
-    pub body:      Body<'a>,
+pub struct Item<'text>{
+    pub head:      Symbol<'text>,
+    pub body:      Body<'text>,
     pub dot:       usize,
-    pub lookahead: Vec<Symbol<'a>>,
+    pub lookahead: Vec<Symbol<'text>>,
 }
 
-impl<'a> ToString for Item<'a> {
+impl<'text> ToString for Item<'text> {
     fn to_string(&self) -> String {
 	let mut body = self.body.clone();
 	body.insert(self.dot, ".");
@@ -43,19 +43,60 @@ impl<'a> ToString for Item<'a> {
     }
 }
 
-pub type State<'a> = Vec<Item<'a>>;
+//pub type State<'text> = Vec<Item<'text>>;
+#[derive(Debug, Clone)]
+pub struct  State<'text>{
+    items: Vec<Item<'text>>,
+}
 
+
+impl<'text> State<'text> {
+    pub fn new() -> Self {
+	State {
+	    items: Vec::<Item<'text>>::new(),
+	}
+    }
+    pub fn push(&mut self, item: Item<'text>) {
+	self.items.push(item);
+    }
+    pub fn contains(&self, item: &Item<'text>) -> bool {
+	self.items.contains(item)
+    }
+	
+    pub fn count_items(&self) -> i32 {
+	self.items.len() as i32
+    }
+
+    pub fn iter(&self) -> Iter<Item> {
+	self.items.iter()
+	
+    }
+
+
+}
+
+impl<'text> From<Vec<Item<'text>>> for State<'text> {
+    fn from(items: Vec<Item<'text>>) -> Self{
+	Self{items}
+    }
+}
+
+impl<'text> PartialEq for State<'text> {
+    fn eq(&self, other: &State) -> bool {
+	return true;
+    }
+}
 
 #[derive(Debug)]
-pub struct CFG<'a> {
-    pub S:  Symbol<'a>,
-    pub T:  HashSet<Symbol<'a>>,
-    pub NT: HashSet<Symbol<'a>>,
-    pub P:  Vec<Production<'a>>,
+pub struct CFG<'text> {
+    pub S:  Symbol<'text>,
+    pub T:  HashSet<Symbol<'text>>,
+    pub NT: HashSet<Symbol<'text>>,
+    pub P:  Vec<Production<'text>>,
 
-    loc : HashMap<Symbol<'a>, usize>,
-    _FIRST: HashMap<Symbol<'a>, HashMap<Symbol<'a>, Body<'a>>>,
-    _FOLLOW: HashMap<Symbol<'a>, HashSet<Symbol<'a>>>,
+    loc : HashMap<Symbol<'text>, usize>,
+    _FIRST: HashMap<Symbol<'text>, HashMap<Symbol<'text>, Body<'text>>>,
+    _FOLLOW: HashMap<Symbol<'text>, HashSet<Symbol<'text>>>,
 }
 
 
@@ -83,8 +124,8 @@ fn body2item (head: Symbol, body: &Vec<Symbol>) -> Item {
 }
 */
 
-impl<'a> Production<'a> {
-    pub fn new(rank: usize, s: &'a str) -> Self {
+impl<'text> Production<'text> {
+    pub fn new(rank: usize, s: &'text str) -> Self {
 	let mut p = Production {
 	    rank,
 	    head: "",
@@ -95,7 +136,7 @@ impl<'a> Production<'a> {
 	return p;
     }
 
-    pub fn parse (&mut self, s: &'a str) {
+    pub fn parse (&mut self, s: &'text str) {
 	let v =  s.split("->").collect::<Vec<&str>>();
 	self.head = v[0].trim();
 	for body_str in v[1].trim().split("|") {
@@ -107,27 +148,27 @@ impl<'a> Production<'a> {
 	}
     }
 
-    pub fn deconstruct(&self) -> Vec<Item> {
+    pub fn deconstruct(&self) -> Vec<Item<'text>> {
 	self.bodies.iter().map(|x| Item {head:self.head, body:x.clone(), dot:0, lookahead:Vec::new()}).collect::<Vec<Item>>()
 
     }
 }
 
-impl<'a> PartialEq for Production<'a>{
+impl<'text> PartialEq for Production<'text>{
     fn eq(&self, other: &Production) -> bool{
 	return self.rank == other.rank && self.head == other.head;
     }
 
 }
 
-impl<'a> Hash for Production<'a> {
+impl<'text> Hash for Production<'text> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.rank.hash(state);
         self.head.hash(state);
     }
 }
 
-impl<'a> PartialEq for Item<'a> {
+impl<'text> PartialEq for Item<'text> {
     fn eq(&self, other: &Item)->bool {
 	return self.head == other.head &&
 	    self.body ==  other.body &&
@@ -136,7 +177,7 @@ impl<'a> PartialEq for Item<'a> {
     }
 }
 
-impl<'a> Hash for Item<'a> {
+impl<'text> Hash for Item<'text> {
     fn hash<H: Hasher>(&self, state: &mut H) {
 	self.head.hash(state);
 	for x in self.body.iter() {
@@ -148,8 +189,8 @@ impl<'a> Hash for Item<'a> {
 }
 
 
-impl<'a> CFG<'a>  {
-    pub fn new(s: &'a str) -> Self {
+impl<'text> CFG<'text>  {
+    pub fn new(s: &'text str) -> Self {
 	let mut cfg = Self {
 	    T: HashSet::new(),
 	    NT: HashSet::new(),
@@ -164,7 +205,7 @@ impl<'a> CFG<'a>  {
 	return cfg;
     }
 
-    pub fn normalize(&mut self, s: &'a str) {
+    pub fn normalize(&mut self, s: &'text str) {
 	let mut idx:usize = 0;
 	let symbol_set = s.replace("->", "").replace("|", " ").split_whitespace();
 	//let symbol_set = symbol_set.clone().collect::<HashSet<Symbol>>();
@@ -202,18 +243,23 @@ impl<'a> CFG<'a>  {
 	return !self.is_non_terminal(symbol);
     }
 
-    pub fn get_production(&self, symbol: Symbol)-> &Production {
+    pub fn get_items(&self, symbol: Symbol<'text>) -> Option<Vec<Item<'text>>> {
+	let items = Vec::<Item>::new();
 	if let Some(idx) = self.loc.get(symbol) {
-	    let production = &self.P[*idx];
-	    return production;
-	} else {
-	    return &self.P[0];
+	    if let Some(production) = self.P.get(*idx as usize) {
+		return Some(production.deconstruct());
+	    }
 	}
+
+	return None;
+
     }
 
+    
 
 
-    pub fn first_set(&self, beta: &Vec<Symbol<'a>>) -> HashSet<Symbol<'a>> {
+
+    pub fn first_set(&self, beta: &Vec<Symbol<'text>>) -> HashSet<Symbol<'text>> {
 
 	let mut symbols = HashSet::<Symbol>::new();
 	for symbol in beta.iter() {
@@ -242,7 +288,7 @@ impl<'a> CFG<'a>  {
 	return symbols;
     }
     
-    pub fn set_first_set(&mut self, nt: Symbol<'a>, symbol_set: HashSet<Symbol<'a>>, body:  Body<'a>) {
+    pub fn set_first_set(&mut self, nt: Symbol<'text>, symbol_set: HashSet<Symbol<'text>>, body:  Body<'text>) {
 	
 	if let Some(m) = self._FIRST.get_mut(&nt) {
 	    for x in symbol_set.into_iter() {
@@ -271,12 +317,12 @@ impl<'a> CFG<'a>  {
 
     }
 
-    fn FIRST2(&self, symbol: Symbol<'a>) -> HashSet<Symbol<'a>> {
+    fn FIRST2(&self, symbol: Symbol<'text>) -> HashSet<Symbol<'text>> {
 	let v = vec![symbol];
 	self.FIRST(v)
     }
 	
-    fn FIRST(&self, beta: Vec<Symbol<'a>>) -> HashSet<Symbol<'a>> {
+    fn FIRST(&self, beta: Vec<Symbol<'text>>) -> HashSet<Symbol<'text>> {
 	let mut ret = HashSet::<Symbol>::new();
 	for symbol in beta.iter() {
 	    let mut symbols = HashSet::<Symbol>::new();
@@ -356,7 +402,7 @@ impl<'a> CFG<'a>  {
 
 	}
     }
-    pub fn calc_follow_set_relations(&self, left: Symbol<'a>, right: &Body<'a>, rels: &mut HashMap<Symbol<'a>, HashSet::<Symbol<'a>>>) {
+    pub fn calc_follow_set_relations(&self, left: Symbol<'text>, right: &Body<'text>, rels: &mut HashMap<Symbol<'text>, HashSet::<Symbol<'text>>>) {
 	//deduct the relations of FOLLOW sets
 	for &symbol in right.iter().rev() {
 	    if self.is_terminal(symbol) {
@@ -379,11 +425,11 @@ impl<'a> CFG<'a>  {
 	
     }
     
-    pub fn calc_direct_suffix(&self, right: &Body<'a>, cache: &mut HashMap<Symbol<'a>, HashSet::<Symbol<'a>>>) {
+    pub fn calc_direct_suffix(&self, right: &Body<'text>, cache: &mut HashMap<Symbol<'text>, HashSet::<Symbol<'text>>>) {
 	let mut check_follow = false;
 	let mut last_nt = "";
 	for &symbol in right.iter() {
-	    let mut symbols = HashSet::<Symbol<'a>>::new();
+	    let mut symbols = HashSet::<Symbol<'text>>::new();
 
 	    if self.is_non_terminal(symbol) {
 		if check_follow {
@@ -423,8 +469,8 @@ impl<'a> CFG<'a>  {
 
     pub fn calculate_follow_set(&mut self) {
 	println!("NT set {:?}", self.NT);	
-	let mut rels:HashMap::<Symbol<'a>, HashSet<Symbol<'a>>> = HashMap::new();
-	let mut cache: HashMap<Symbol<'a>, HashSet<Symbol<'a>>> = HashMap::new();
+	let mut rels:HashMap::<Symbol<'text>, HashSet<Symbol<'text>>> = HashMap::new();
+	let mut cache: HashMap<Symbol<'text>, HashSet<Symbol<'text>>> = HashMap::new();
 
 	//Build direct suffixes and follow set relations first
 	for production in self.P.iter() {
@@ -489,7 +535,7 @@ impl<'a> CFG<'a>  {
         }
     }
 
-    pub fn FOLLOW(&self, nt: Symbol<'a>) -> HashSet<Symbol<'a>>{
+    pub fn FOLLOW(&self, nt: Symbol<'text>) -> HashSet<Symbol<'text>>{
 	let mut r = HashSet::new();
 	if let Some(v) = self._FOLLOW.get(nt) {
 	    v.iter().for_each(|&x| {r.insert(x); });
