@@ -702,5 +702,23 @@ if __name__ == '__main__':
     parser = LR0(cfg)
     parser.print()
     parser.parse("id * id + id")
-    parser.view()
+    #parser.view()
+
+
+    parser.parse("id * id + id * ( id + id )")
+    parser.view()    
+    
+    s = '''
+                 E  -> T E'      
+                 E' -> + T E' | ε
+                 T  -> F T'
+                 T' -> * F T' | ε
+                 F  -> ( E ) | id
+    '''
+    cfg = CFG(s)
+    parser = LR0(cfg)
+    parser.print()
+    parser.parse("id * id + id")    
+
+    
 

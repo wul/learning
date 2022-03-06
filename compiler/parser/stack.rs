@@ -15,6 +15,7 @@ impl<T> Stack<T> {
     pub fn push(&mut self, item: T){
         self.items.push(item);
     }
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.items.len()
     }
